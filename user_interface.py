@@ -3,7 +3,7 @@ user_interface.py - 用户交互模块
 负责所有用户输入输出交互
 """
 
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional, List, Tuple, Dict
 
 class UserInterface:
     """用户界面管理器"""

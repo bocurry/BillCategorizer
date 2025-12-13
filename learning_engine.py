@@ -6,7 +6,7 @@ learning_engine.py - 学习引擎模块
 import json
 import os
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
 class LearningEngine:

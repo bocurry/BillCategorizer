@@ -4,18 +4,41 @@ main.py - 主程序入口
 
 import sys
 import traceback
+from typing import Optional
 
 # 导入各个模块
-from config import ConfigManager
-from data_loader import DataLoader
-from learning_engine import LearningEngine
-from user_interface import UserInterface
-from data_exporter import DataExporter
-from categorizer import BillCategorizer
+try:
+    from config import ConfigManager
+    from data_loader import DataLoader
+    from learning_engine import LearningEngine
+    from user_interface import UserInterface
+    from data_exporter import DataExporter
+    from categorizer import BillCategorizer
+except ImportError as e:
+    print(f"❌ 导入模块失败: {e}")
+    print("请确保所有模块文件都在同一目录下:")
+    print("  - config.py")
+    print("  - data_loader.py")
+    print("  - learning_engine.py")
+    print("  - user_interface.py")
+    print("  - data_exporter.py")
+    print("  - categorizer.py")
+    input("按回车键退出...")
+    sys.exit(1)
 
 def main():
     """主函数"""
     try:
+        # 检查必要库
+        try:
+            import pandas as pd
+            import openpyxl
+        except ImportError as e:
+            print(f"❌ 缺少必要库: {e}")
+            print("请运行: pip install pandas openpyxl")
+            input("按回车键退出...")
+            return
+        
         # 1. 初始化配置管理器
         print("正在初始化配置...")
         config_manager = ConfigManager()
@@ -47,14 +70,4 @@ def main():
         input("\n按回车键退出...")
 
 if __name__ == "__main__":
-    # 检查必要库
-    try:
-        import pandas as pd
-        import openpyxl
-    except ImportError as e:
-        print(f"❌ 缺少必要库: {e}")
-        print("请运行: pip install pandas openpyxl")
-        input("按回车键退出...")
-        sys.exit(1)
-    
     main()

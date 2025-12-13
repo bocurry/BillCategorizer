@@ -6,7 +6,7 @@ config.py - 配置管理模块
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 class ConfigManager:
     """配置管理器"""

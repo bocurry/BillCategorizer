@@ -6,7 +6,7 @@ categorizer.py - 分类引擎主模块
 import pandas as pd
 from datetime import datetime
 from collections import defaultdict
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 
 class BillCategorizer:
     """账单分类器 - 主控制器"""
@@ -38,8 +38,8 @@ class BillCategorizer:
             input("按回车键退出...")
             return
         
-        # 3. 读取数据
-        df = self.data_loader.load_excel_file(selected_file)
+        # 3. 读取数据（根据用户选择的账单来源）
+        df = self.data_loader.load_excel_file(selected_file, self.current_bill_source)
         if df is None:
             input("按回车键退出...")
             return
@@ -58,7 +58,7 @@ class BillCategorizer:
         # 6. 保存学习数据
         self.learning_engine.save_data()
         
-        # 7. 导出结果
+        # 7. 导出结果（输出格式统一）
         final_df = self.exporter.prepare_final_dataframe(df, self.current_bill_source, self.current_person)
         output_file = self.exporter.export_to_csv(final_df, self.current_bill_source)
         

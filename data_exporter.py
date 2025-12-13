@@ -5,7 +5,7 @@ data_exporter.py - 数据导出模块
 
 import pandas as pd
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, List
 
 class DataExporter:
     """数据导出器"""

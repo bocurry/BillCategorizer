@@ -95,9 +95,44 @@ class DataExporter:
     
     def export_to_csv(self, df: pd.DataFrame, bill_source: str) -> str:
         """导出数据到CSV文件"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"家庭账单_{bill_source}_{timestamp}.csv"
+        # 从数据中提取信息
+        # 1. 用户名：取Person列中最常见的值（如果有多个人，取第一个）
+        if 'Person' in df.columns and len(df) > 0:
+            person = df['Person'].mode()[0] if len(df['Person'].mode()) > 0 else df['Person'].iloc[0]
+            person = str(person).strip()
+        else:
+            person = "未知用户"
         
+        # 2. 月份：从Date列中提取月份（取第一个日期的月份）
+        if 'Date' in df.columns and len(df) > 0:
+            try:
+                # Date格式是 YYYY-MM-DD，提取月份
+                first_date = str(df['Date'].iloc[0])
+                if '-' in first_date:
+                    month_num = int(first_date.split('-')[1])
+                    # 转换为中文月份
+                    month_map = {
+                        1: "1月", 2: "2月", 3: "3月", 4: "4月", 5: "5月", 6: "6月",
+                        7: "7月", 8: "8月", 9: "9月", 10: "10月", 11: "11月", 12: "12月"
+                    }
+                    month = month_map.get(month_num, f"{month_num}月")
+                else:
+                    month = datetime.now().strftime("%m月")
+            except:
+                # 如果解析失败，使用当前月份
+                month = datetime.now().strftime("%m月")
+        else:
+            month = datetime.now().strftime("%m月")
+
+        # 3. 来源：使用参数或从数据中提取
+        if 'Source' in df.columns and len(df) > 0:
+            source = str(df['Source'].mode()[0] if len(df['Source'].mode()) > 0 else df['Source'].iloc[0]).strip()
+        else:
+            source = bill_source
+
+        # 生成文件名：${用户名}-${月份}-${Source}-已分类账单.csv
+        output_file = f"{person}-{month}-{source}-已分类账单.csv"    
+
         df.to_csv(output_file, index=False, encoding='utf-8-sig')
         print(f"✅ 账单已保存到: {output_file}")
         

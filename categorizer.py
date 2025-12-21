@@ -35,13 +35,15 @@ class BillCategorizer:
         selected_file = self.ui.display_file_list(excel_files)
         
         if not selected_file:
-            input("按回车键退出...")
+            if not hasattr(self.ui, 'show_results'):
+                input("按回车键退出...")
             return
         
         # 3. 读取数据（根据用户选择的账单来源）
         df = self.data_loader.load_excel_file(selected_file, self.current_bill_source)
         if df is None:
-            input("按回车键退出...")
+            if not hasattr(self.ui, 'show_results'):
+                input("按回车键退出...")
             return
         
         # 4. 选择人员模式
@@ -55,6 +57,23 @@ class BillCategorizer:
         # 5. 处理数据
         df = self._process_transactions(df, person_mode)
         
+        # 检查是否有处理的数据
+        if len(df) == 0:
+            # 用户提前退出，没有处理任何数据
+            is_gui = hasattr(self.ui, 'show_results')
+            if is_gui:
+                import tkinter.messagebox as msgbox
+                msgbox.showinfo("提示", "已取消处理，未保存任何数据")
+                # 关闭交易窗口
+                if hasattr(self.ui, 'transaction_window') and self.ui.transaction_window:
+                    try:
+                        self.ui.transaction_window.destroy()
+                    except:
+                        pass
+            else:
+                print("\n⚠️  已取消处理，未保存任何数据")
+            return
+        
         # 6. 保存学习数据
         self.learning_engine.save_data()
         
@@ -65,11 +84,17 @@ class BillCategorizer:
         # 8. 显示结果
         self._display_results(final_df, output_file)
         
-        input("\n✨ 处理完成！按回车键退出...")
+        # 如果是GUI模式，不需要等待输入
+        if not hasattr(self.ui, 'show_results'):
+            input("\n✨ 处理完成！按回车键退出...")
     
     def _process_transactions(self, df: pd.DataFrame, person_mode: str) -> pd.DataFrame:
         """处理所有交易记录"""
-        print("\n🚀 开始分类处理...")
+        # 检查是否是GUI模式
+        is_gui = hasattr(self.ui, 'show_results')
+        
+        if not is_gui:
+            print("\n🚀 开始分类处理...")
         
         categories = []
         persons = []
@@ -86,17 +111,31 @@ class BillCategorizer:
             )
             
             if category is None:  # 用户选择退出
-                print("\n⚠️  用户中断处理")
+                if not is_gui:
+                    print("\n⚠️  用户中断处理")
                 break
             
             categories.append(category)
             persons.append(person)
+            
+            # GUI模式下，更新界面并添加到已分类列表
+            if is_gui and hasattr(self.ui, 'root'):
+                # 添加已分类的交易到列表
+                if hasattr(self.ui, 'add_classified_transaction'):
+                    self.ui.add_classified_transaction(row, category, person)
+                self.ui.root.update_idletasks()
         
-        # 添加结果列
-        df['分类'] = categories[:len(df)]
-        df['人员'] = persons[:len(df)]
-        
-        return df
+        # 添加结果列（只添加已处理的记录）
+        # 如果用户提前退出，categories和persons的长度可能小于df的长度
+        if len(categories) > 0:
+            # 创建新的DataFrame，只包含已处理的记录
+            processed_df = df.iloc[:len(categories)].copy()
+            processed_df['分类'] = categories
+            processed_df['人员'] = persons
+            return processed_df
+        else:
+            # 如果没有处理任何记录，返回空的DataFrame
+            return df.iloc[0:0].copy()
     
     def _process_single_transaction(self, idx: int, total: int, row: dict, 
                                    person_mode: str) -> Tuple[Optional[str], Optional[str]]:
@@ -114,9 +153,12 @@ class BillCategorizer:
         # 检查特殊交易类型
         tx_type = str(row.get('交易类型', ''))
         special_types = self.config.get('categories.special_types', {})
+        is_gui = hasattr(self.ui, 'show_results')
+        
         for type_key, category in special_types.items():
             if type_key in tx_type:
-                print(f"✅ 自动分类为: {category} (交易类型: {type_key})")
+                if not is_gui:
+                    print(f"✅ 自动分类为: {category} (交易类型: {type_key})")
                 self.stats['auto'] += 1
                 
                 # 记录学习
@@ -154,6 +196,12 @@ class BillCategorizer:
                 prompt="请输入新分类名称: ",
                 input_type='text'
             )
+            # 将新分类添加到基础分类列表
+            if category and category not in base_categories:
+                base_categories.append(category)
+                # 更新配置
+                self.config.set('categories.base_categories', base_categories)
+                self.config.save_custom_config()
             self.stats['manual'] += 1
         elif isinstance(choice, int):
             if choice <= len(suggestions):
@@ -181,17 +229,24 @@ class BillCategorizer:
     
     def _display_results(self, final_df: pd.DataFrame, output_file: str):
         """显示处理结果"""
-        # 显示预览
-        preview_count = self.config.get('display.preview_count', 5)
-        self.exporter.display_preview(final_df, preview_count)
-        
-        # 显示统计
-        self._display_statistics(final_df)
-        
-        print(f"\n💾 规则库状态:")
-        engine_stats = self.learning_engine.get_statistics()
-        print(f"  当前规则数: {engine_stats['total_rules']} / {engine_stats['max_rules']}")
-        print(f"  历史记录数: {engine_stats['total_history']} / {engine_stats['max_history']}")
+        # 检查是否是GUI界面
+        if hasattr(self.ui, 'show_results'):
+            # GUI模式：使用GUI显示结果
+            engine_stats = self.learning_engine.get_statistics()
+            self.ui.show_results(final_df, output_file, self.stats, engine_stats)
+        else:
+            # CLI模式：使用命令行显示
+            # 显示预览
+            preview_count = self.config.get('display.preview_count', 5)
+            self.exporter.display_preview(final_df, preview_count)
+            
+            # 显示统计
+            self._display_statistics(final_df)
+            
+            print(f"\n💾 规则库状态:")
+            engine_stats = self.learning_engine.get_statistics()
+            print(f"  当前规则数: {engine_stats['total_rules']} / {engine_stats['max_rules']}")
+            print(f"  历史记录数: {engine_stats['total_history']} / {engine_stats['max_history']}")
     
     def _display_statistics(self, df: pd.DataFrame):
         """显示统计信息"""

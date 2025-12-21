@@ -103,6 +103,14 @@ class DataLoader:
                 print(f"CSV列名: {list(df.columns)}")
                 print(f"CSV数据形状: {df.shape}")
 
+                # 在转换前，先过滤掉"不计收支"的记录
+                if "收/支" in df.columns:
+                    original_count = len(df)
+                    df = df[df["收/支"].astype(str).str.strip() != "不计收支"]
+                    filtered_count = len(df)
+                    if original_count > filtered_count:
+                        print(f"⚠️  已过滤 {original_count - filtered_count} 条'不计收支'的记录")
+
                 # 显示前3条数据确认
                 if len(df) > 0:
                     print("\n📋 数据预览（前3条）:")
@@ -335,7 +343,6 @@ class DataLoader:
 
             # 5. 收/支
             if "收/支" in alipay_df.columns:
-
                 def convert_income_expense(x):
                     x_str = str(x).strip()
                     if x_str in ["收入", "收", "转入", "收款"]:
@@ -530,13 +537,15 @@ class DataLoader:
     def find_excel_files(self, directory: str = ".") -> list:
         """查找目录中的Excel账单文件"""
         excel_files = []
-
-        for file in os.listdir(directory):
-            if file.endswith((".xlsx", ".xls", ".csv")) and (
-                "微信" in file or "账单" in file or "支付宝" in file
-            ):
-                excel_files.append(file)
-
+        # 使用 os.walk 递归搜索所有子目录
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.endswith((".xlsx", ".xls", ".csv")) and (
+                    "微信" in file or "账单" in file or "支付宝" in file
+                ):
+                    # 返回相对路径（相对于directory）
+                    file_path = os.path.relpath(os.path.join(root, file), directory)
+                    excel_files.append(file_path)
         return excel_files
 
     def _find_wechat_data_start_row(self, df: pd.DataFrame) -> Optional[int]:

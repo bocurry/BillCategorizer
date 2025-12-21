@@ -85,12 +85,7 @@ class ConfigManager:
                     "山姆&盒马",
                     "水果&超市",
                     "买菜",
-                ],
-                "special_types": {
-                    "转账": "人情往来",
-                    "微信红包": "人情往来",
-                    "收付款": "人情往来",
-                },
+                ]
             },
             # 显示配置
             "display": {"preview_count": 5, "progress_interval": 10},

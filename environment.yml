@@ -3,16 +3,9 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=39
-  - pip
-  - numpy
+  - python=3.9
   - pandas
-  - scikit-learn
-  - matplotlib
-  - jupyter
+  - openpyxl
   - pip:
-    - tensorflow
-    - torch
-    - transformers
     - pytest
     - flake8

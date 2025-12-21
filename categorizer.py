@@ -150,26 +150,9 @@ class BillCategorizer:
         else:
             person = self.current_person
         
-        # 检查特殊交易类型
+        # 获取交易类型
         tx_type = str(row.get('交易类型', ''))
-        special_types = self.config.get('categories.special_types', {})
-        is_gui = hasattr(self.ui, 'show_results')
-        
-        for type_key, category in special_types.items():
-            if type_key in tx_type:
-                if not is_gui:
-                    print(f"✅ 自动分类为: {category} (交易类型: {type_key})")
-                self.stats['auto'] += 1
-                
-                # 记录学习
-                amount = row.get('处理后的金额', row.get('金额(元)', 0))
-                if isinstance(amount, (int, float)):
-                    self.learning_engine.learn_from_decision(
-                        merchant, category, person, self.current_bill_source, amount
-                    )
-                
-                return category, person
-        
+
         # 获取分类建议
         suggestions = self.learning_engine.get_suggestions(merchant, tx_type)
         base_categories = self.config.get('categories.base_categories', [])

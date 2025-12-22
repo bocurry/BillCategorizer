@@ -1061,6 +1061,59 @@ class GUIInterface:
         # 每100ms检查一次队列
         self.root.after(100, self._process_queue)
     
+    def ask_continue_processing(self) -> bool:
+        """询问用户是否继续处理下一个账单"""
+        def show_dialog():
+            dialog = tk.Toplevel(self.root)
+            dialog.title("继续处理")
+            dialog.geometry("400x200")
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # 居中显示
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+            dialog.geometry(f"400x200+{x}+{y}")
+            
+            frame = ttk.Frame(dialog, padding="20")
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(
+                frame,
+                text="✨ 当前账单处理完成！",
+                style='Heading.TLabel'
+            ).pack(pady=10)
+            
+            ttk.Label(
+                frame,
+                text="是否继续处理下一个账单？",
+                style='Info.TLabel'
+            ).pack(pady=10)
+            
+            btn_frame = ttk.Frame(frame)
+            btn_frame.pack(pady=20)
+            
+            ttk.Button(
+                btn_frame,
+                text="是，继续处理",
+                command=lambda: self._set_choice_and_close(True, dialog),
+                width=15
+            ).pack(side=tk.LEFT, padx=10)
+            
+            ttk.Button(
+                btn_frame,
+                text="否，退出程序",
+                command=lambda: self._set_choice_and_close(False, dialog),
+                width=15
+            ).pack(side=tk.LEFT, padx=10)
+            
+            dialog.protocol("WM_DELETE_WINDOW", lambda: self._set_choice_and_close(False, dialog))
+            dialog.wait_window()
+        
+        result = self._show_modal_dialog(show_dialog)
+        return result if result is not None else False
+    
     def destroy(self):
         """销毁窗口"""
         if self.root:

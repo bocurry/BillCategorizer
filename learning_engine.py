@@ -104,13 +104,6 @@ class LearningEngine:
         suggestions = {}
         merchant_str = str(merchant)
         
-        # 检查特殊交易类型
-        special_types = self.config.get('categories.special_types', {})
-        for type_key, category in special_types.items():
-            if type_key in transaction_type:
-                suggestions[category] = f"交易类型: {type_key}"
-                return suggestions  # 特殊类型优先
-        
         # 精确匹配
         if merchant_str in self.rules:
             if isinstance(self.rules[merchant_str], (list, tuple)):
@@ -196,7 +189,7 @@ class LearningEngine:
         rules_file = self.config.get_file_path('rules_file')
         try:
             with open(rules_file, 'w', encoding='utf-8') as f:
-                json.dump(rules_data, f, ensure_ascii=False, separators=(',', ':'))
+                json.dump(rules_data, f, ensure_ascii=False, indent=2)
             print(f"✅ 规则已保存到: {rules_file} ({len(self.rules)}条)")
         except Exception as e:
             print(f"❌ 保存规则失败: {e}")

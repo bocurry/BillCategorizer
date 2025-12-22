@@ -133,6 +133,21 @@ class UserInterface:
         print(f"✅ 账单来源: {selected_source}")
         return selected_source
     
+    def ask_continue_processing(self) -> bool:
+        """询问用户是否继续处理下一个账单"""
+        print("\n" + "="*70)
+        print("✨ 当前账单处理完成！")
+        print("="*70)
+        
+        while True:
+            choice = input("\n是否继续处理下一个账单？(y/n): ").strip().lower()
+            if choice in ['y', 'yes']:
+                return True
+            elif choice in ['n', 'no']:
+                return False
+            else:
+                print("❌ 请输入 y 或 n")
+    
     def select_person_mode(self) -> Tuple[str, str]:
         """选择人员模式"""
         people_options = self.config.get('categories.people_options', [])

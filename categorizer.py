@@ -24,69 +24,101 @@ class BillCategorizer:
         self.current_person = ""
     
     def run(self):
-        """主运行函数"""
-        self.ui.display_welcome()
+        """主运行函数 - 支持批处理多个账单"""
+        # 只在第一次运行时显示欢迎信息
+        first_run = True
         
-        # 1. 选择账单来源
-        self.current_bill_source = self.ui.select_bill_source()
-        
-        # 2. 选择文件
-        excel_files = self.data_loader.find_excel_files()
-        selected_file = self.ui.display_file_list(excel_files)
-        
-        if not selected_file:
-            if not hasattr(self.ui, 'show_results'):
-                input("按回车键退出...")
-            return
-        
-        # 3. 读取数据（根据用户选择的账单来源）
-        df = self.data_loader.load_excel_file(selected_file, self.current_bill_source)
-        if df is None:
-            if not hasattr(self.ui, 'show_results'):
-                input("按回车键退出...")
-            return
-        
-        # 4. 选择人员模式
-        person_mode_result = self.ui.select_person_mode()
-        if person_mode_result[1] == 'fixed':
-            self.current_person = person_mode_result[0]
-            person_mode = 'fixed'
-        else:
-            person_mode = 'per_transaction'
-        
-        # 5. 处理数据
-        df = self._process_transactions(df, person_mode)
-        
-        # 检查是否有处理的数据
-        if len(df) == 0:
-            # 用户提前退出，没有处理任何数据
-            is_gui = hasattr(self.ui, 'show_results')
-            if is_gui:
-                import tkinter.messagebox as msgbox
-                msgbox.showinfo("提示", "已取消处理，未保存任何数据")
-                # 关闭交易窗口
-                if hasattr(self.ui, 'transaction_window') and self.ui.transaction_window:
-                    try:
-                        self.ui.transaction_window.destroy()
-                    except:
-                        pass
+        while True:
+            if first_run:
+                self.ui.display_welcome()
+                first_run = False
             else:
-                print("\n⚠️  已取消处理，未保存任何数据")
-            return
+                # 重置统计信息，准备处理下一个账单
+                self.stats = defaultdict(int)
+            
+            # 1. 选择账单来源
+            self.current_bill_source = self.ui.select_bill_source()
+            
+            # 2. 选择文件
+            excel_files = self.data_loader.find_excel_files()
+            selected_file = self.ui.display_file_list(excel_files)
+            
+            if not selected_file:
+                # 用户取消选择文件，询问是否继续
+                if not hasattr(self.ui, 'show_results'):
+                    if not self.ui.ask_continue_processing():
+                        break
+                else:
+                    # GUI模式：如果用户取消选择文件，询问是否继续
+                    if not self.ui.ask_continue_processing():
+                        break
+                continue
+            
+            # 3. 读取数据（根据用户选择的账单来源）
+            df = self.data_loader.load_excel_file(selected_file, self.current_bill_source)
+            if df is None:
+                # 读取失败，询问是否继续
+                if not hasattr(self.ui, 'show_results'):
+                    print("❌ 读取文件失败")
+                    if not self.ui.ask_continue_processing():
+                        break
+                else:
+                    import tkinter.messagebox as msgbox
+                    msgbox.showerror("错误", "读取文件失败")
+                    if not self.ui.ask_continue_processing():
+                        break
+                continue
+            
+            # 4. 选择人员模式
+            person_mode_result = self.ui.select_person_mode()
+            if person_mode_result[1] == 'fixed':
+                self.current_person = person_mode_result[0]
+                person_mode = 'fixed'
+            else:
+                person_mode = 'per_transaction'
+            
+            # 5. 处理数据
+            df = self._process_transactions(df, person_mode)
+            
+            # 检查是否有处理的数据
+            if len(df) == 0:
+                # 用户提前退出，没有处理任何数据
+                is_gui = hasattr(self.ui, 'show_results')
+                if is_gui:
+                    import tkinter.messagebox as msgbox
+                    msgbox.showinfo("提示", "已取消处理，未保存任何数据")
+                    # 关闭交易窗口
+                    if hasattr(self.ui, 'transaction_window') and self.ui.transaction_window:
+                        try:
+                            self.ui.transaction_window.destroy()
+                        except:
+                            pass
+                else:
+                    print("\n⚠️  已取消处理，未保存任何数据")
+                
+                # 询问是否继续处理下一个账单
+                if not self.ui.ask_continue_processing():
+                    break
+                continue
+            
+            # 6. 保存学习数据
+            self.learning_engine.save_data()
+            
+            # 7. 导出结果（输出格式统一）
+            final_df = self.exporter.prepare_final_dataframe(df, self.current_bill_source, self.current_person)
+            output_file = self.exporter.export_to_csv(final_df, self.current_bill_source)
+            
+            # 8. 显示结果
+            self._display_results(final_df, output_file)
+            
+            # 9. 询问是否继续处理下一个账单
+            if not self.ui.ask_continue_processing():
+                break
         
-        # 6. 保存学习数据
-        self.learning_engine.save_data()
-        
-        # 7. 导出结果（输出格式统一）
-        final_df = self.exporter.prepare_final_dataframe(df, self.current_bill_source, self.current_person)
-        output_file = self.exporter.export_to_csv(final_df, self.current_bill_source)
-        
-        # 8. 显示结果
-        self._display_results(final_df, output_file)
-        
-        # 如果是GUI模式，不需要等待输入
-        if not hasattr(self.ui, 'show_results'):
-            input("\n✨ 处理完成！按回车键退出...")
+        # 所有处理完成
+        is_gui = hasattr(self.ui, 'show_results')
+        if not is_gui:
+            print("\n👋 感谢使用！程序已退出。")
     
     def _process_transactions(self, df: pd.DataFrame, person_mode: str) -> pd.DataFrame:
         """处理所有交易记录"""

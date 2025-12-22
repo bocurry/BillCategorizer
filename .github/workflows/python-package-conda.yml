@@ -41,3 +41,51 @@ jobs:
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         # 在CI环境中，GUI测试会被自动跳过
         pytest -v
+    
+    - name: Build with PyInstaller (Linux)
+      run: |
+        pip install pyinstaller
+        pyinstaller build.spec --clean --noconfirm
+        ls -lh dist/
+    
+    - name: Upload Linux build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: BillCategorizer-linux
+        path: dist/BillCategorizer/
+        retention-days: 30
+        if-no-files-found: warn
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: |
+        pip install pandas openpyxl pytest flake8 pyinstaller
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Test with pytest
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
+      run: |
+        pytest -v
+    - name: Build with PyInstaller (Windows)
+      run: |
+        pyinstaller build.spec --clean --noconfirm
+        dir dist\BillCategorizer
+    - name: Upload Windows build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: BillCategorizer-windows
+        path: dist/BillCategorizer/
+        retention-days: 30
+        if-no-files-found: warn

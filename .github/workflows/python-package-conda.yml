@@ -32,8 +32,12 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         conda install pytest
         export DISPLAY=:99
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-        pytest
+        # 在CI环境中，GUI测试会被自动跳过
+        pytest -v

@@ -29,6 +29,10 @@ class BillCategorizer:
         first_run = True
         
         while True:
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
+            
             if first_run:
                 self.ui.display_welcome()
                 first_run = False
@@ -36,12 +40,24 @@ class BillCategorizer:
                 # 重置统计信息，准备处理下一个账单
                 self.stats = defaultdict(int)
             
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
+            
             # 1. 选择账单来源
             self.current_bill_source = self.ui.select_bill_source()
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
             
             # 2. 选择文件
             excel_files = self.data_loader.find_excel_files()
             selected_file = self.ui.display_file_list(excel_files)
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
             
             if not selected_file:
                 # 用户取消选择文件，询问是否继续
@@ -53,6 +69,10 @@ class BillCategorizer:
                     if not self.ui.ask_continue_processing():
                         break
                 continue
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
             
             # 3. 读取数据（根据用户选择的账单来源）
             df = self.data_loader.load_excel_file(selected_file, self.current_bill_source)
@@ -69,8 +89,17 @@ class BillCategorizer:
                         break
                 continue
             
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
+            
             # 4. 选择人员模式
             person_mode_result = self.ui.select_person_mode()
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
+            
             if person_mode_result[1] == 'fixed':
                 self.current_person = person_mode_result[0]
                 person_mode = 'fixed'
@@ -79,6 +108,10 @@ class BillCategorizer:
             
             # 5. 处理数据
             df = self._process_transactions(df, person_mode)
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
             
             # 检查是否有处理的数据
             if len(df) == 0:
@@ -101,6 +134,10 @@ class BillCategorizer:
                     break
                 continue
             
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
+            
             # 6. 保存学习数据
             self.learning_engine.save_data()
             
@@ -110,6 +147,10 @@ class BillCategorizer:
             
             # 8. 显示结果
             self._display_results(final_df, output_file)
+            
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                break
             
             # 9. 询问是否继续处理下一个账单
             if not self.ui.ask_continue_processing():
@@ -132,6 +173,11 @@ class BillCategorizer:
         persons = []
         
         for idx, row in df.iterrows():
+            # 检查停止标志
+            if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
+                # 如果用户关闭窗口，返回已处理的数据
+                break
+            
             self.stats['total'] += 1
             
             # 显示进度

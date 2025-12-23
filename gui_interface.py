@@ -62,6 +62,42 @@ class GUIInterface:
         # 结果显示窗口
         self.result_window = None
         
+        # 添加停止标志
+        self.should_stop = False
+        
+        # 设置主窗口关闭协议
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+    def _on_closing(self):
+        """处理主窗口关闭事件"""
+        self.should_stop = True
+        
+        # 关闭所有子窗口
+        if self.transaction_window and self.transaction_window.winfo_exists():
+            try:
+                self.transaction_window.destroy()
+            except:
+                pass
+        
+        if self.result_window and self.result_window.winfo_exists():
+            try:
+                self.result_window.destroy()
+            except:
+                pass
+        
+        # 关闭主窗口
+        self.root.destroy()
+    
+    def _on_transaction_window_closing(self):
+        """处理交易窗口关闭事件"""
+        # 如果用户关闭交易窗口，设置停止标志
+        self.should_stop = True
+        if self.transaction_window:
+            try:
+                self.transaction_window.destroy()
+            except:
+                pass
+        
     def display_welcome(self):
         """显示欢迎信息"""
         # 清除现有内容
@@ -113,6 +149,10 @@ class GUIInterface:
     
     def select_bill_source(self) -> str:
         """选择账单来源"""
+        # 检查是否应该停止
+        if self.should_stop:
+            return None
+        
         bill_sources = self.config.get('categories.bill_sources', [])
         
         def show_dialog():
@@ -165,6 +205,10 @@ class GUIInterface:
     
     def display_file_list(self, files: List[str]) -> Optional[str]:
         """显示文件列表并让用户选择"""
+        # 检查是否应该停止
+        if self.should_stop:
+            return None
+        
         if not files:
             messagebox.showwarning("提示", "未找到账单文件\n请将账单文件放在程序目录下")
             return None
@@ -247,6 +291,10 @@ class GUIInterface:
     
     def select_person_mode(self) -> Tuple[str, str]:
         """选择人员模式"""
+        # 检查是否应该停止
+        if self.should_stop:
+            return ('', 'per_transaction')
+        
         def show_dialog():
             dialog = tk.Toplevel(self.root)
             dialog.title("选择人员分配方式")
@@ -631,6 +679,9 @@ class GUIInterface:
         y = (self.transaction_window.winfo_screenheight() // 2) - (700 // 2)
         self.transaction_window.geometry(f"1000x700+{x}+{y}")
         
+        # 设置交易窗口关闭协议
+        self.transaction_window.protocol("WM_DELETE_WINDOW", self._on_transaction_window_closing)
+        
         # 进度条
         progress_frame = ttk.Frame(self.transaction_window, padding="10")
         progress_frame.pack(fill=tk.X, pady=5)
@@ -944,6 +995,9 @@ class GUIInterface:
         y = (self.result_window.winfo_screenheight() // 2) - (700 // 2)
         self.result_window.geometry(f"900x700+{x}+{y}")
         
+        # 设置结果窗口关闭协议
+        self.result_window.protocol("WM_DELETE_WINDOW", self.result_window.destroy)
+        
         # 创建Notebook（标签页）
         notebook = ttk.Notebook(self.result_window)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -1063,6 +1117,10 @@ class GUIInterface:
     
     def ask_continue_processing(self) -> bool:
         """询问用户是否继续处理下一个账单"""
+        # 检查是否应该停止
+        if self.should_stop:
+            return False
+        
         def show_dialog():
             dialog = tk.Toplevel(self.root)
             dialog.title("继续处理")

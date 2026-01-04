@@ -142,7 +142,14 @@ class BillCategorizer:
             self.learning_engine.save_data()
             
             # 7. 导出结果（输出格式统一）
-            final_df = self.exporter.prepare_final_dataframe(df, self.current_bill_source, self.current_person)
+            # 如果是在GUI模式且存在已修改的DataFrame（可能包含删除的记录），优先使用它
+            export_df = df
+            is_gui = hasattr(self.ui, 'show_results')
+            if is_gui and hasattr(self.ui, 'current_processed_df') and self.ui.current_processed_df is not None:
+                # 使用GUI中可能被编辑/删除过的DataFrame
+                export_df = self.ui.current_processed_df
+            
+            final_df = self.exporter.prepare_final_dataframe(export_df, self.current_bill_source, self.current_person)
             output_file = self.exporter.export_to_csv(final_df, self.current_bill_source)
             
             # 8. 显示结果
@@ -210,6 +217,38 @@ class BillCategorizer:
             processed_df = df.iloc[:len(categories)].copy()
             processed_df['分类'] = categories
             processed_df['人员'] = persons
+            
+            # 新增：保存到 GUI（如果存在）
+            if is_gui and hasattr(self.ui, 'current_processed_df'):
+                # 如果 current_processed_df 已经存在且有数据，说明用户可能已经编辑过
+                # 需要合并 processed_df 和 current_processed_df，保留编辑后的分类
+                if self.ui.current_processed_df is not None and len(self.ui.current_processed_df) > 0:
+                    # 合并策略：使用 processed_df 作为基础，但保留 current_processed_df 中编辑后的分类
+                    if len(processed_df) == len(self.ui.current_processed_df):
+                        # 如果长度相同，保留 current_processed_df 的分类和人员（用户编辑后的）
+                        # 但更新其他列（如果有变化）
+                        processed_df['分类'] = self.ui.current_processed_df['分类'].values
+                        processed_df['人员'] = self.ui.current_processed_df['人员'].values
+                        self.ui.current_processed_df = processed_df
+                    elif len(processed_df) > len(self.ui.current_processed_df):
+                        # 如果 processed_df 更长，说明有新的记录
+                        # 保留 current_processed_df 中已有的记录的分类，新记录使用 processed_df 的分类
+                        for idx in range(len(self.ui.current_processed_df)):
+                            if idx < len(processed_df):
+                                processed_df.iloc[idx, processed_df.columns.get_loc('分类')] = self.ui.current_processed_df.iloc[idx]['分类']
+                                processed_df.iloc[idx, processed_df.columns.get_loc('人员')] = self.ui.current_processed_df.iloc[idx]['人员']
+                        self.ui.current_processed_df = processed_df
+                    else:
+                        # 如果 current_processed_df 更长，说明用户可能删除了记录
+                        # 使用 current_processed_df（保留用户的操作）
+                        pass  # 不更新，保持 current_processed_df
+                else:
+                    # 如果 current_processed_df 为空，直接设置
+                    self.ui.current_processed_df = processed_df
+                # 新增：保存 categorizer 引用到 GUI
+                if hasattr(self.ui, 'categorizer'):
+                    self.ui.categorizer = self
+            
             return processed_df
         else:
             # 如果没有处理任何记录，返回空的DataFrame

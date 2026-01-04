@@ -129,7 +129,8 @@ class LearningEngine:
         return suggestions
     
     def learn_from_decision(self, merchant: str, category: str, 
-                           person: str, bill_source: str, amount: float):
+                           person: str, bill_source: str, amount: float,
+                           update_existing: bool = False, old_category: str = None):
         """
         从用户决策中学习
         
@@ -139,6 +140,8 @@ class LearningEngine:
             person: 人员
             bill_source: 账单来源
             amount: 金额
+            update_existing: 是否更新已存在的记录（用于修改分类时）
+            old_category: 旧的分类（用于查找要更新的记录）
         """
         # 更新规则库
         if merchant not in self.rules:
@@ -149,9 +152,32 @@ class LearningEngine:
                 self.merchant_index[index_key].append(merchant)
         else:
             if isinstance(self.rules[merchant], (list, tuple)):
-                self.rules[merchant][1] += 1
+                # 如果分类发生变化，更新分类；否则增加使用次数
+                if self.rules[merchant][0] != category:
+                    self.rules[merchant][0] = category
+                    # 分类变化时，重置使用次数为1（因为这是新的分类）
+                    self.rules[merchant][1] = 1
+                else:
+                    self.rules[merchant][1] += 1
             else:
                 self.rules[merchant] = [self.rules[merchant], 2]
+        
+        # 处理历史记录
+        if update_existing and old_category:
+            # 如果是更新操作，查找并删除旧的历史记录
+            # 查找条件：相同的商户、金额、账单来源和旧的分类
+            # 优先删除最近添加的记录（从后往前查找）
+            removed = False
+            for i in range(len(self.history) - 1, -1, -1):
+                h = self.history[i]
+                if (h.get('merchant') == merchant and 
+                    abs(h.get('amount', 0) - amount) < 0.01 and
+                    h.get('bill_source') == bill_source and
+                    h.get('category') == old_category):
+                    # 找到匹配的记录，删除它
+                    del self.history[i]
+                    removed = True
+                    break  # 只删除最近的一条匹配记录
         
         # 记录历史
         self.history.append({
@@ -182,7 +208,7 @@ class LearningEngine:
             'total_rules': len(self.rules),
             'rules': self.rules,
             'metadata': {
-                'categories': self.config.get('categories', {})
+                'categories': self.config.get_categories_config()
             }
         }
         

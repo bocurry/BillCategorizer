@@ -59,6 +59,16 @@ class GUIInterface:
         self.classified_list = []  # 存储已分类的交易信息
         self.classified_tree = None  # Treeview组件
         
+        # 新增：存储已分类交易的完整数据
+        self.classified_data = []  # 存储 {row, category, person, tree_item_id, index}
+        self.tree_item_to_index = {}  # 映射 tree item ID 到 classified_data 索引
+        
+        # 新增：存储当前处理的 DataFrame 引用（用于更新数据）
+        self.current_processed_df = None
+        
+        # 新增：存储 categorizer 引用（用于访问 learning_engine 和当前状态）
+        self.categorizer = None
+        
         # 结果显示窗口
         self.result_window = None
         
@@ -763,6 +773,12 @@ class GUIInterface:
         classified_scrollbar_y.config(command=self.classified_tree.yview)
         classified_scrollbar_x.config(command=self.classified_tree.xview)
         
+        # 新增：绑定双击事件
+        self.classified_tree.bind('<Double-Button-1>', self._on_classified_item_double_click)
+        
+        # 新增：绑定右键菜单
+        self.classified_tree.bind('<Button-3>', self._on_classified_item_right_click)
+        
         # 按钮区域
         self.button_frame = ttk.Frame(self.transaction_window, padding="10")
         self.button_frame.pack(fill=tk.X, pady=5)
@@ -897,11 +913,33 @@ class GUIInterface:
             amount_str = str(amount)
         
         # 添加到Treeview（插入到顶部）
-        self.classified_tree.insert(
+        item_id = self.classified_tree.insert(
             '',
             0,  # 插入到顶部
             values=(date, merchant, product, amount_str, category, person)
         )
+        
+        # 新增：保存完整数据
+        # 注意：由于插入到开头，classified_data 是倒序的
+        # 第一个处理的记录在 DataFrame 的 index 0，在 classified_data 的最后一个位置
+        # 所以新添加的记录在 DataFrame 的 index = len(self.classified_data)
+        data_entry = {
+            'row': row.copy(),  # 保存原始行数据
+            'category': category,
+            'person': person,
+            'tree_item_id': item_id,
+            'index': len(self.classified_data)  # 在 processed_df 中的索引（正序）
+        }
+        self.classified_data.insert(0, data_entry)  # 插入到开头（倒序）
+        
+        # 更新索引映射（因为插入到开头，所有索引都要更新）
+        self.tree_item_to_index = {}
+        for i, entry in enumerate(self.classified_data):
+            self.tree_item_to_index[entry['tree_item_id']] = i
+            # 由于 classified_data 是倒序的，需要计算在 DataFrame 中的实际位置
+            # classified_data[0] 对应 DataFrame 的最后一个位置
+            # classified_data[i] 对应 DataFrame 的 len(classified_data) - 1 - i
+            entry['index'] = len(self.classified_data) - 1 - i
         
         # 自动滚动到顶部显示最新添加的记录
         children = self.classified_tree.get_children()
@@ -1097,6 +1135,209 @@ class GUIInterface:
         ).pack()
         
         messagebox.showinfo("处理完成", f"账单已处理完成！\n\n导出文件：{output_file}")
+    
+    def _on_classified_item_double_click(self, event):
+        """处理已分类账单的双击事件"""
+        selection = self.classified_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        if item_id not in self.tree_item_to_index:
+            return
+        
+        # 获取数据索引
+        data_index = self.tree_item_to_index[item_id]
+        if data_index >= len(self.classified_data):
+            return
+        
+        # 获取当前数据
+        data_entry = self.classified_data[data_index]
+        
+        # 显示编辑对话框
+        self._edit_classified_transaction(data_entry, item_id)
+    
+    def _on_classified_item_right_click(self, event):
+        """处理已分类账单的右键点击事件"""
+        selection = self.classified_tree.selection()
+        if not selection:
+            return
+        
+        item_id = selection[0]
+        if item_id not in self.tree_item_to_index:
+            return
+        
+        # 创建右键菜单
+        menu = tk.Menu(self.transaction_window, tearoff=0)
+        menu.add_command(label="编辑", command=lambda: self._edit_classified_transaction(
+            self.classified_data[self.tree_item_to_index[item_id]], item_id))
+        
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+    
+    def _edit_classified_transaction(self, data_entry: dict, item_id: str):
+        """编辑已分类的交易"""
+        # 创建编辑对话框
+        dialog = tk.Toplevel(self.transaction_window)
+        dialog.title("编辑分类")
+        dialog.geometry("400x350")
+        dialog.transient(self.transaction_window)
+        dialog.grab_set()
+        
+        # 居中显示
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (350 // 2)
+        dialog.geometry(f"400x350+{x}+{y}")
+        
+        frame = ttk.Frame(dialog, padding="20")
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 显示交易信息（只读）
+        row = data_entry['row']
+        merchant = str(row.get('交易对方', '未知商户'))
+        product = str(row.get('商品', '无'))
+        amount = row.get('处理后的金额', row.get('金额(元)', 0))
+        date = str(row.get('交易时间', '未知时间'))
+        if len(date) > 19:
+            date = date[:19]
+        
+        info_text = f"时间: {date}\n商户: {merchant}\n商品: {product}\n"
+        if isinstance(amount, (int, float)):
+            info_text += f"金额: ¥{amount:+.2f}"
+        else:
+            info_text += f"金额: {amount}"
+        
+        info_label = ttk.Label(
+            frame,
+            text=info_text,
+            style='Info.TLabel',
+            justify=tk.LEFT
+        )
+        info_label.pack(pady=10, anchor=tk.W)
+        
+        # 分类选择
+        ttk.Label(frame, text="分类:", style='Heading.TLabel').pack(pady=(10, 5), anchor=tk.W)
+        category_var = tk.StringVar(value=data_entry['category'])
+        
+        base_categories = self.config.get('categories.base_categories', [])
+        category_combo = ttk.Combobox(frame, textvariable=category_var, values=base_categories, width=30, state='readonly')
+        category_combo.pack(pady=5, fill=tk.X)
+        
+        # 人员选择
+        ttk.Label(frame, text="人员:", style='Heading.TLabel').pack(pady=(10, 5), anchor=tk.W)
+        person_var = tk.StringVar(value=data_entry['person'])
+        
+        people_options = self.config.get('categories.people_options', [])
+        person_combo = ttk.Combobox(frame, textvariable=person_var, values=people_options, width=30, state='readonly')
+        person_combo.pack(pady=5, fill=tk.X)
+        
+        # 按钮
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(pady=20)
+        
+        def save_changes():
+            new_category = category_var.get()
+            new_person = person_var.get()
+            
+            if not new_category or not new_person:
+                messagebox.showwarning("提示", "分类和人员不能为空")
+                return
+            
+            # 获取原始分类（用于规则库更新）
+            old_category = data_entry['category']
+            old_person = data_entry['person']
+            
+            # 更新数据
+            data_entry['category'] = new_category
+            data_entry['person'] = new_person
+            
+            # 更新 Treeview 显示
+            current_values = list(self.classified_tree.item(item_id, 'values'))
+            current_values[4] = new_category  # 分类列
+            current_values[5] = new_person    # 人员列
+            self.classified_tree.item(item_id, values=tuple(current_values))
+            
+            # 更新底层 DataFrame（如果存在）
+            # 如果 current_processed_df 为空，尝试从 classified_data 重建
+            # 但要注意：如果 current_processed_df 已经有数据，不要重建，直接更新
+            if self.current_processed_df is None or len(self.current_processed_df) == 0:
+                # 从 classified_data 重建 DataFrame
+                if len(self.classified_data) > 0:
+                    import pandas as pd
+                    # 按 index 排序，确保顺序正确
+                    sorted_data = sorted(self.classified_data, key=lambda x: x['index'])
+                    # 重建 DataFrame
+                    rows = []
+                    for entry in sorted_data:
+                        row_data = entry['row'].copy()
+                        row_data['分类'] = entry['category']
+                        row_data['人员'] = entry['person']
+                        rows.append(row_data)
+                    if rows:
+                        self.current_processed_df = pd.DataFrame(rows)
+            
+            if self.current_processed_df is not None and len(self.current_processed_df) > 0:
+                data_index = data_entry['index']
+                # 确保索引在有效范围内
+                if 0 <= data_index < len(self.current_processed_df):
+                    # 获取DataFrame的实际索引标签（可能不是从0开始的连续整数）
+                    actual_index_label = self.current_processed_df.index[data_index]
+                    
+                    # 使用loc基于标签索引更新，这样更可靠
+                    # 即使DataFrame的索引不是从0开始，也能正确更新
+                    if '分类' in self.current_processed_df.columns:
+                        self.current_processed_df.loc[actual_index_label, '分类'] = new_category
+                    if '人员' in self.current_processed_df.columns:
+                        self.current_processed_df.loc[actual_index_label, '人员'] = new_person
+                    
+                    # 验证更新是否成功（使用实际索引标签）
+                    if '分类' in self.current_processed_df.columns:
+                        updated_value = self.current_processed_df.loc[actual_index_label, '分类']
+                        if str(updated_value) != str(new_category):
+                            # 如果loc更新失败，尝试重置索引后使用iloc
+                            # 保存原始索引
+                            original_index = self.current_processed_df.index.copy()
+                            # 重置为从0开始的连续整数索引
+                            self.current_processed_df = self.current_processed_df.reset_index(drop=True)
+                            # 使用iloc更新
+                            if '分类' in self.current_processed_df.columns:
+                                self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('分类')] = new_category
+                            if '人员' in self.current_processed_df.columns:
+                                self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('人员')] = new_person
+            
+            # 新增：更新规则库（如果分类发生变化）
+            if self.categorizer is not None:
+                merchant = str(row.get('交易对方', '未知商户'))
+                amount = row.get('处理后的金额', row.get('金额(元)', 0))
+                bill_source = getattr(self.categorizer, 'current_bill_source', '其他')
+                
+                # 调用学习引擎更新规则库
+                # 如果分类发生变化，使用update_existing=True来更新历史记录
+                update_existing = (new_category != old_category or new_person != old_person)
+                if isinstance(amount, (int, float)):
+                    self.categorizer.learning_engine.learn_from_decision(
+                        merchant, new_category, new_person, bill_source, amount,
+                        update_existing=update_existing,
+                        old_category=old_category if update_existing else None
+                    )
+                else:
+                    self.categorizer.learning_engine.learn_from_decision(
+                        merchant, new_category, new_person, bill_source, 0,
+                        update_existing=update_existing,
+                        old_category=old_category if update_existing else None
+                    )
+                
+                # 立即保存规则库和历史记录，确保修改后的数据被持久化
+                self.categorizer.learning_engine.save_data()
+            
+            dialog.destroy()
+            messagebox.showinfo("成功", "分类已更新，规则库和历史记录已同步保存")
+        
+        ttk.Button(btn_frame, text="保存", command=save_changes).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="取消", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
     
     def run(self):
         """运行GUI主循环"""

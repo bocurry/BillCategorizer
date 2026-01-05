@@ -68,6 +68,8 @@ class GUIInterface:
         
         # 新增：存储 categorizer 引用（用于访问 learning_engine 和当前状态）
         self.categorizer = None
+        # 新增：直接存储 learning_engine 引用（即使 categorizer 为 None 也能访问）
+        self.learning_engine = None
         
         # 结果显示窗口
         self.result_window = None
@@ -1309,29 +1311,42 @@ class GUIInterface:
                                 self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('人员')] = new_person
             
             # 新增：更新规则库（如果分类发生变化）
-            if self.categorizer is not None:
+            # 优先使用 learning_engine（即使 categorizer 为 None 也能工作）
+            learning_engine = None
+            if self.learning_engine is not None:
+                learning_engine = self.learning_engine
+            elif self.categorizer is not None:
+                learning_engine = self.categorizer.learning_engine
+            
+            if learning_engine is not None:
                 merchant = str(row.get('交易对方', '未知商户'))
                 amount = row.get('处理后的金额', row.get('金额(元)', 0))
-                bill_source = getattr(self.categorizer, 'current_bill_source', '其他')
+                bill_source = getattr(self.categorizer, 'current_bill_source', '其他') if self.categorizer is not None else '其他'
                 
                 # 调用学习引擎更新规则库
                 # 如果分类发生变化，使用update_existing=True来更新历史记录
                 update_existing = (new_category != old_category or new_person != old_person)
+                
+                # 调试：打印更新信息
+                print(f"[DEBUG] 更新规则库: merchant={merchant}, old_category={old_category}, new_category={new_category}, update_existing={update_existing}")
+                
                 if isinstance(amount, (int, float)):
-                    self.categorizer.learning_engine.learn_from_decision(
+                    learning_engine.learn_from_decision(
                         merchant, new_category, new_person, bill_source, amount,
                         update_existing=update_existing,
                         old_category=old_category if update_existing else None
                     )
                 else:
-                    self.categorizer.learning_engine.learn_from_decision(
+                    learning_engine.learn_from_decision(
                         merchant, new_category, new_person, bill_source, 0,
                         update_existing=update_existing,
                         old_category=old_category if update_existing else None
                     )
                 
                 # 立即保存规则库和历史记录，确保修改后的数据被持久化
-                self.categorizer.learning_engine.save_data()
+                learning_engine.save_data()
+            else:
+                messagebox.showerror("错误", "无法访问学习引擎，规则库更新失败！")
             
             dialog.destroy()
             messagebox.showinfo("成功", "分类已更新，规则库和历史记录已同步保存")

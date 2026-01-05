@@ -5,6 +5,7 @@ learning_engine.py - 学习引擎模块
 
 import json
 import os
+import threading
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
@@ -18,6 +19,11 @@ class LearningEngine:
         # 规则库数据结构
         self.rules: Dict[str, List] = {}  # {商户: [分类, 使用次数]}
         self.history: List[Dict] = []
+        # 手动编辑的分类标记（使用负数表示手动编辑，不会被自动学习覆盖）
+        self.manual_edited_rules: set = set()  # 存储手动编辑过的商户名
+        
+        # 添加线程锁，确保线程安全
+        self._lock = threading.Lock()
         
         # 性能限制
         limits = self.config.get_limits()
@@ -52,6 +58,12 @@ class LearningEngine:
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 rules = data.get('rules', {})
+                
+                # 加载手动编辑的商户列表（向后兼容）
+                if 'manual_edited_rules' in data:
+                    self.manual_edited_rules = set(data.get('manual_edited_rules', []))
+                else:
+                    self.manual_edited_rules = set()
                 
                 # 限制规则数量
                 if len(rules) > max_rules:
@@ -143,90 +155,113 @@ class LearningEngine:
             update_existing: 是否更新已存在的记录（用于修改分类时）
             old_category: 旧的分类（用于查找要更新的记录）
         """
-        # 更新规则库
-        if merchant not in self.rules:
-            self.rules[merchant] = [category, 1]
-            # 更新索引
-            if len(merchant) >= 3:
-                index_key = merchant[:3].lower()
-                self.merchant_index[index_key].append(merchant)
-        else:
-            if isinstance(self.rules[merchant], (list, tuple)):
-                # 如果分类发生变化，更新分类；否则增加使用次数
-                if self.rules[merchant][0] != category:
-                    self.rules[merchant][0] = category
-                    # 分类变化时，重置使用次数为1（因为这是新的分类）
-                    self.rules[merchant][1] = 1
-                else:
-                    self.rules[merchant][1] += 1
+        # 使用锁确保线程安全
+        with self._lock:
+            # 更新规则库
+            if merchant not in self.rules:
+                self.rules[merchant] = [category, 1]
+                # 更新索引
+                if len(merchant) >= 3:
+                    index_key = merchant[:3].lower()
+                    self.merchant_index[index_key].append(merchant)
             else:
-                self.rules[merchant] = [self.rules[merchant], 2]
-        
-        # 处理历史记录
-        if update_existing and old_category:
-            # 如果是更新操作，查找并删除旧的历史记录
-            # 查找条件：相同的商户、金额、账单来源和旧的分类
-            # 优先删除最近添加的记录（从后往前查找）
-            removed = False
-            for i in range(len(self.history) - 1, -1, -1):
-                h = self.history[i]
-                if (h.get('merchant') == merchant and 
-                    abs(h.get('amount', 0) - amount) < 0.01 and
-                    h.get('bill_source') == bill_source and
-                    h.get('category') == old_category):
-                    # 找到匹配的记录，删除它
-                    del self.history[i]
-                    removed = True
-                    break  # 只删除最近的一条匹配记录
-        
-        # 记录历史
-        self.history.append({
-            'merchant': merchant,
-            'category': category,
-            'person': person,
-            'bill_source': bill_source,
-            'amount': amount,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # 限制历史记录数量
-        if len(self.history) > self.max_history:
-            self.history = self.history[-self.max_history:]
+                if isinstance(self.rules[merchant], (list, tuple)):
+                    # 如果这是手动编辑的分类（update_existing=True），标记为手动编辑
+                    if update_existing:
+                        self.manual_edited_rules.add(merchant)
+                    
+                    # 如果分类发生变化，更新分类；否则增加使用次数
+                    old_rule_category = self.rules[merchant][0]
+                    if self.rules[merchant][0] != category:
+                        # 如果这是手动编辑的分类，允许更新
+                        # 如果这不是手动编辑，但规则库中已有手动编辑的分类，则不覆盖
+                        if not update_existing and merchant in self.manual_edited_rules:
+                            # 不更新分类，只增加使用次数（保护手动编辑的分类）
+                            self.rules[merchant][1] += 1
+                        else:
+                            self.rules[merchant][0] = category
+                            # 分类变化时，重置使用次数为1（因为这是新的分类）
+                            self.rules[merchant][1] = 1
+                    else:
+                        self.rules[merchant][1] += 1
+                else:
+                    self.rules[merchant] = [self.rules[merchant], 2]
+            
+            # 处理历史记录
+            if update_existing and old_category:
+                # 如果是更新操作，查找并删除旧的历史记录
+                # 查找条件：相同的商户、金额、账单来源和旧的分类
+                # 优先删除最近添加的记录（从后往前查找）
+                removed = False
+                for i in range(len(self.history) - 1, -1, -1):
+                    h = self.history[i]
+                    match_merchant = h.get('merchant') == merchant
+                    match_amount = abs(h.get('amount', 0) - amount) < 0.01
+                    match_bill_source = h.get('bill_source') == bill_source
+                    match_category = h.get('category') == old_category
+                    
+                    if (match_merchant and match_amount and match_bill_source and match_category):
+                        # 找到匹配的记录，删除它
+                        del self.history[i]
+                        removed = True
+                        break  # 只删除最近的一条匹配记录
+            
+            # 记录历史
+            new_history_item = {
+                'merchant': merchant,
+                'category': category,
+                'person': person,
+                'bill_source': bill_source,
+                'amount': amount,
+                'timestamp': datetime.now().isoformat()
+            }
+            self.history.append(new_history_item)
+            
+            # 限制历史记录数量
+            if len(self.history) > self.max_history:
+                self.history = self.history[-self.max_history:]
+        # 锁在这里释放（with语句结束）
     
     def save_data(self):
         """保存规则库和历史记录"""
-        # 保存规则库
-        if len(self.rules) > self.max_rules:
-            rules_list = list(self.rules.items())
-            if all(isinstance(v, (list, tuple)) and len(v) > 1 for v in self.rules.values()):
-                rules_list.sort(key=lambda x: x[1][1], reverse=True)
-            self.rules = dict(rules_list[:self.max_rules])
-        
-        rules_data = {
-            'version': '2.0',
-            'save_time': datetime.now().isoformat(),
-            'total_rules': len(self.rules),
-            'rules': self.rules,
-            'metadata': {
-                'categories': self.config.get_categories_config()
+        # 使用锁确保线程安全
+        with self._lock:
+            # 保存规则库
+            if len(self.rules) > self.max_rules:
+                rules_list = list(self.rules.items())
+                if all(isinstance(v, (list, tuple)) and len(v) > 1 for v in self.rules.values()):
+                    rules_list.sort(key=lambda x: x[1][1], reverse=True)
+                self.rules = dict(rules_list[:self.max_rules])
+            
+            rules_data = {
+                'version': '2.0',
+                'save_time': datetime.now().isoformat(),
+                'total_rules': len(self.rules),
+                'rules': self.rules,
+                'manual_edited_rules': list(self.manual_edited_rules),  # 保存手动编辑的商户列表
+                'metadata': {
+                    'categories': self.config.get_categories_config()
+                }
             }
-        }
-        
-        rules_file = self.config.get_file_path('rules_file')
-        try:
-            with open(rules_file, 'w', encoding='utf-8') as f:
-                json.dump(rules_data, f, ensure_ascii=False, indent=2)
-            print(f"✅ 规则已保存到: {rules_file} ({len(self.rules)}条)")
-        except Exception as e:
-            print(f"❌ 保存规则失败: {e}")
-        
-        # 保存历史
-        history_file = self.config.get_file_path('history_file')
-        try:
-            with open(history_file, 'w', encoding='utf-8') as f:
-                json.dump(self.history, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"❌ 保存历史失败: {e}")
+            
+            rules_file = self.config.get_file_path('rules_file')
+            try:
+                import json
+                with open(rules_file, 'w', encoding='utf-8') as f:
+                    json.dump(rules_data, f, ensure_ascii=False, indent=2)
+                print(f"✅ 规则已保存到: {rules_file} ({len(self.rules)}条)")
+            except Exception as e:
+                print(f"❌ 保存规则失败: {e}")
+            
+            # 保存历史
+            history_file = self.config.get_file_path('history_file')
+            try:
+                with open(history_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.history, f, ensure_ascii=False, indent=2)
+                print(f"✅ 历史记录已保存到: {history_file} ({len(self.history)}条)")
+            except Exception as e:
+                print(f"❌ 保存历史失败: {e}")
+        # 锁在这里释放（with语句结束）
     
     def get_statistics(self) -> Dict:
         """获取统计信息"""

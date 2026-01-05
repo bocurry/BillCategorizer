@@ -22,6 +22,12 @@ class BillCategorizer:
         self.stats = defaultdict(int)
         self.current_bill_source = ""
         self.current_person = ""
+        
+        # 新增：将 learning_engine 也保存到 GUIInterface，以便在编辑时也能访问
+        if hasattr(self.ui, 'learning_engine'):
+            self.ui.learning_engine = learning_engine
+        if hasattr(self.ui, 'categorizer'):
+            self.ui.categorizer = self
     
     def run(self):
         """主运行函数 - 支持批处理多个账单"""

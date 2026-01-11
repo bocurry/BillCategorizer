@@ -59,13 +59,21 @@ class DataExporter:
         # 6. Source
         final_df['Source'] = bill_source
         
+        # 7. 是否自动分类
+        if '是否自动分类' in df.columns:
+            final_df['是否自动分类'] = df['是否自动分类'].apply(
+                lambda x: '是' if x else '否'
+            )
+        else:
+            final_df['是否自动分类'] = '否'  # 默认值
+        
         # 可选：保留原始信息（英文列名）
         final_df['Original_Merchant'] = df['交易对方']
         final_df['Original_Product'] = df['商品']
         final_df['Transaction_Type'] = df['交易类型'] if '交易类型' in df.columns else ''
         
-        # 确保列顺序：Name, Category, Amount, Date, Person, Source
-        main_columns = ['Name', 'Category', 'Amount', 'Date', 'Person', 'Source']
+        # 确保列顺序：Name, Category, Amount, Date, Person, Source, 是否自动分类
+        main_columns = ['Name', 'Category', 'Amount', 'Date', 'Person', 'Source', '是否自动分类']
         extra_columns = [col for col in final_df.columns if col not in main_columns]
         
         final_df = final_df[main_columns + extra_columns]

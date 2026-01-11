@@ -22,12 +22,6 @@ class BillCategorizer:
         self.stats = defaultdict(int)
         self.current_bill_source = ""
         self.current_person = ""
-        
-        # 新增：将 learning_engine 也保存到 GUIInterface，以便在编辑时也能访问
-        if hasattr(self.ui, 'learning_engine'):
-            self.ui.learning_engine = learning_engine
-        if hasattr(self.ui, 'categorizer'):
-            self.ui.categorizer = self
     
     def run(self):
         """主运行函数 - 支持批处理多个账单"""
@@ -179,11 +173,22 @@ class BillCategorizer:
         # 检查是否是GUI模式
         is_gui = hasattr(self.ui, 'show_results')
         
+        # 新增：清空之前的已分类数据
+        if is_gui:
+            if hasattr(self.ui, 'classified_data'):
+                self.ui.classified_data = []
+                self.ui.tree_item_to_index = {}
+                if hasattr(self.ui, 'classified_tree') and self.ui.classified_tree:
+                    # 清空 Treeview
+                    for item in self.ui.classified_tree.get_children():
+                        self.ui.classified_tree.delete(item)
+        
         if not is_gui:
             print("\n🚀 开始分类处理...")
         
         categories = []
         persons = []
+        is_auto_list = []  # 新增：记录是否自动分类
         
         for idx, row in df.iterrows():
             # 检查停止标志
@@ -197,7 +202,7 @@ class BillCategorizer:
             self.ui.display_progress(idx, len(df))
             
             # 处理单条交易
-            category, person = self._process_single_transaction(
+            category, person, is_auto = self._process_single_transaction(
                 idx + 1, len(df), row, person_mode
             )
             
@@ -208,12 +213,13 @@ class BillCategorizer:
             
             categories.append(category)
             persons.append(person)
+            is_auto_list.append(is_auto)  # 记录分类方式
             
             # GUI模式下，更新界面并添加到已分类列表
             if is_gui and hasattr(self.ui, 'root'):
                 # 添加已分类的交易到列表
                 if hasattr(self.ui, 'add_classified_transaction'):
-                    self.ui.add_classified_transaction(row, category, person)
+                    self.ui.add_classified_transaction(row, category, person, is_auto)
                 self.ui.root.update_idletasks()
         
         # 添加结果列（只添加已处理的记录）
@@ -223,6 +229,7 @@ class BillCategorizer:
             processed_df = df.iloc[:len(categories)].copy()
             processed_df['分类'] = categories
             processed_df['人员'] = persons
+            processed_df['是否自动分类'] = is_auto_list  # 新增列
             
             # 新增：保存到 GUI（如果存在）
             if is_gui and hasattr(self.ui, 'current_processed_df'):
@@ -235,6 +242,9 @@ class BillCategorizer:
                         # 但更新其他列（如果有变化）
                         processed_df['分类'] = self.ui.current_processed_df['分类'].values
                         processed_df['人员'] = self.ui.current_processed_df['人员'].values
+                        # 如果 current_processed_df 有是否自动分类列，也保留它
+                        if '是否自动分类' in self.ui.current_processed_df.columns:
+                            processed_df['是否自动分类'] = self.ui.current_processed_df['是否自动分类'].values
                         self.ui.current_processed_df = processed_df
                     elif len(processed_df) > len(self.ui.current_processed_df):
                         # 如果 processed_df 更长，说明有新的记录
@@ -243,6 +253,8 @@ class BillCategorizer:
                             if idx < len(processed_df):
                                 processed_df.iloc[idx, processed_df.columns.get_loc('分类')] = self.ui.current_processed_df.iloc[idx]['分类']
                                 processed_df.iloc[idx, processed_df.columns.get_loc('人员')] = self.ui.current_processed_df.iloc[idx]['人员']
+                                if '是否自动分类' in self.ui.current_processed_df.columns and '是否自动分类' in processed_df.columns:
+                                    processed_df.iloc[idx, processed_df.columns.get_loc('是否自动分类')] = self.ui.current_processed_df.iloc[idx]['是否自动分类']
                         self.ui.current_processed_df = processed_df
                     else:
                         # 如果 current_processed_df 更长，说明用户可能删除了记录
@@ -258,11 +270,17 @@ class BillCategorizer:
             return processed_df
         else:
             # 如果没有处理任何记录，返回空的DataFrame
+            if is_gui and hasattr(self.ui, 'current_processed_df'):
+                self.ui.current_processed_df = None
             return df.iloc[0:0].copy()
     
     def _process_single_transaction(self, idx: int, total: int, row: dict, 
-                                   person_mode: str) -> Tuple[Optional[str], Optional[str]]:
-        """处理单条交易记录"""
+                                   person_mode: str) -> Tuple[Optional[str], Optional[str], bool]:
+        """处理单条交易记录
+        
+        返回:
+            (category, person, is_auto) - 分类、人员、是否自动分类
+        """
         # 显示交易信息
         self.ui.display_transaction(idx, total, row)
         
@@ -273,14 +291,48 @@ class BillCategorizer:
         else:
             person = self.current_person
         
+        # 获取商品信息（data_loader已统一映射为"商品"字段）
+        product = str(row.get('商品', ''))
+        
         # 获取交易类型
         tx_type = str(row.get('交易类型', ''))
 
-        # 获取分类建议
-        suggestions = self.learning_engine.get_suggestions(merchant, tx_type)
+        # 获取分类建议（传入商品信息）
+        suggestions = self.learning_engine.get_suggestions(merchant, product, tx_type)
         base_categories = self.config.get('categories.base_categories', [])
         
-        # 显示分类菜单
+        # 检查是否精准匹配（自动分类）
+        # 只有当建议数量为1且包含"精准匹配"标记时，才是真正的精准匹配
+        exact_match = False
+        exact_category = None
+        if suggestions:
+            if len(suggestions) == 1:
+                category, reason = list(suggestions.items())[0]
+                if "精准匹配" in reason:
+                    exact_match = True
+                    exact_category = category
+        
+        # 如果精准匹配，直接使用分类，跳过用户选择
+        if exact_match and exact_category:
+            category = exact_category
+            is_auto = True  # 标记为自动分类
+            self.stats['auto'] += 1
+            
+            # 记录学习
+            amount = row.get('处理后的金额', row.get('金额(元)', 0))
+            if isinstance(amount, (int, float)):
+                self.learning_engine.learn_from_decision(
+                    merchant, category, person, self.current_bill_source, amount, product
+                )
+            else:
+                self.learning_engine.learn_from_decision(
+                    merchant, category, person, self.current_bill_source, 0, product
+                )
+            
+            return category, person, is_auto
+        
+        # 非精准匹配，显示分类菜单让用户选择
+        is_auto = False  # 标记为手动分类
         self.ui.display_classification_menu(suggestions, base_categories)
         
         # 获取用户选择
@@ -293,10 +345,10 @@ class BillCategorizer:
         
         # 处理用户选择
         if choice == 'q':
-            return None, None
+            return None, None, False
         elif choice == 's':
             self.stats['skipped'] += 1
-            return '待确认', person
+            return '待确认', person, False
         elif choice == 'n':
             category = self.ui.get_validated_input(
                 prompt="请输入新分类名称: ",
@@ -312,6 +364,8 @@ class BillCategorizer:
         elif isinstance(choice, int):
             if choice <= len(suggestions):
                 category = list(suggestions.keys())[choice-1]
+                # 如果选择了系统建议的分类，仍然算作自动分类（因为系统推荐了）
+                # 但这不是精准匹配，所以 is_auto = False
                 self.stats['auto'] += 1
             else:
                 category = base_categories[choice - len(suggestions) - 1]
@@ -324,14 +378,14 @@ class BillCategorizer:
         amount = row.get('处理后的金额', row.get('金额(元)', 0))
         if isinstance(amount, (int, float)):
             self.learning_engine.learn_from_decision(
-                merchant, category, person, self.current_bill_source, amount
+                merchant, category, person, self.current_bill_source, amount, product
             )
         else:
             self.learning_engine.learn_from_decision(
-                merchant, category, person, self.current_bill_source, 0
+                merchant, category, person, self.current_bill_source, 0, product
             )
         
-        return category, person
+        return category, person, is_auto
     
     def _display_results(self, final_df: pd.DataFrame, output_file: str):
         """显示处理结果"""

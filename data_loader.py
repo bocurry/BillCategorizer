@@ -103,13 +103,13 @@ class DataLoader:
                 print(f"CSV列名: {list(df.columns)}")
                 print(f"CSV数据形状: {df.shape}")
 
-                # 在转换前，先过滤掉"不计收支"的记录
-                if "收/支" in df.columns:
+                # 在转换前，先过滤掉"交易关闭"的记录
+                if "交易状态" in df.columns:
                     original_count = len(df)
-                    df = df[df["收/支"].astype(str).str.strip() != "不计收支"]
+                    df = df[df["交易状态"].astype(str).str.strip() != "交易关闭"]
                     filtered_count = len(df)
                     if original_count > filtered_count:
-                        print(f"⚠️  已过滤 {original_count - filtered_count} 条'不计收支'的记录")
+                        print(f"⚠️  已过滤 {original_count - filtered_count} 条'交易关闭'的记录")
 
                 # 显示前3条数据确认
                 if len(df) > 0:
@@ -149,6 +149,14 @@ class DataLoader:
             df.columns = [str(col).strip() for col in df.columns]
 
             print(f"Excel原始列名: {list(df.columns)}")
+
+            # 在转换前，先过滤掉"交易关闭"的记录
+            if "交易状态" in df.columns:
+                original_count = len(df)
+                df = df[df["交易状态"].astype(str).str.strip() != "交易关闭"]
+                filtered_count = len(df)
+                if original_count > filtered_count:
+                    print(f"⚠️  已过滤 {original_count - filtered_count} 条'交易关闭'的记录")
 
             # 转换为微信格式
             result = self._convert_alipay_to_wechat_format(df)
@@ -381,6 +389,13 @@ class DataLoader:
                 else:
                     wechat_df["收/支"] = "支出"
                     print("⚠️  未找到收/支列，使用默认值")
+
+            # 特殊处理：退款成功应该被视为收入
+            if "交易状态" in alipay_df.columns:
+                mask = alipay_df["交易状态"].astype(str).str.strip() == "退款成功"
+                if mask.any():
+                    wechat_df.loc[mask, "收/支"] = "收入"
+                    print(f"⚠️  将 {mask.sum()} 条'退款成功'的交易调整为'收入'")
 
             # 6. 金额(元)
             amount_found = False

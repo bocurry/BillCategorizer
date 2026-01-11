@@ -68,8 +68,6 @@ class GUIInterface:
         
         # 新增：存储 categorizer 引用（用于访问 learning_engine 和当前状态）
         self.categorizer = None
-        # 新增：直接存储 learning_engine 引用（即使 categorizer 为 None 也能访问）
-        self.learning_engine = None
         
         # 结果显示窗口
         self.result_window = None
@@ -749,7 +747,7 @@ class GUIInterface:
         # Treeview
         self.classified_tree = ttk.Treeview(
             classified_tree_frame,
-            columns=('时间', '商户', '商品', '金额', '分类', '人员'),
+            columns=('时间', '商户', '商品', '金额', '分类', '人员', '是否自动分类'),
             show='headings',
             yscrollcommand=classified_scrollbar_y.set,
             xscrollcommand=classified_scrollbar_x.set,
@@ -763,6 +761,7 @@ class GUIInterface:
         self.classified_tree.heading('金额', text='金额')
         self.classified_tree.heading('分类', text='分类')
         self.classified_tree.heading('人员', text='人员')
+        self.classified_tree.heading('是否自动分类', text='是否自动分类')
         
         self.classified_tree.column('时间', width=120)
         self.classified_tree.column('商户', width=150)
@@ -770,6 +769,7 @@ class GUIInterface:
         self.classified_tree.column('金额', width=80)
         self.classified_tree.column('分类', width=100)
         self.classified_tree.column('人员', width=80)
+        self.classified_tree.column('是否自动分类', width=100)
         
         self.classified_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         classified_scrollbar_y.config(command=self.classified_tree.yview)
@@ -893,8 +893,15 @@ class GUIInterface:
         self.user_choice = choice
         self.choice_event.set()
     
-    def add_classified_transaction(self, row: dict, category: str, person: str):
-        """添加已分类的交易到列表中"""
+    def add_classified_transaction(self, row: dict, category: str, person: str, is_auto: bool = False):
+        """添加已分类的交易到列表中
+        
+        参数:
+            row: 交易行数据
+            category: 分类
+            person: 人员
+            is_auto: 是否自动分类（默认False）
+        """
         if self.classified_tree is None:
             return
         
@@ -914,11 +921,14 @@ class GUIInterface:
         else:
             amount_str = str(amount)
         
+        # 格式化是否自动分类
+        is_auto_str = '是' if is_auto else '否'
+        
         # 添加到Treeview（插入到顶部）
         item_id = self.classified_tree.insert(
             '',
             0,  # 插入到顶部
-            values=(date, merchant, product, amount_str, category, person)
+            values=(date, merchant, product, amount_str, category, person, is_auto_str)
         )
         
         # 新增：保存完整数据
@@ -929,6 +939,7 @@ class GUIInterface:
             'row': row.copy(),  # 保存原始行数据
             'category': category,
             'person': person,
+            'is_auto': is_auto,  # 保存是否自动分类标记
             'tree_item_id': item_id,
             'index': len(self.classified_data)  # 在 processed_df 中的索引（正序）
         }
@@ -1058,7 +1069,7 @@ class GUIInterface:
         
         tree = ttk.Treeview(
             tree_frame,
-            columns=('Name', 'Category', 'Amount', 'Date', 'Person', 'Source'),
+            columns=('Name', 'Category', 'Amount', 'Date', 'Person', 'Source', '是否自动分类'),
             show='headings',
             yscrollcommand=scrollbar_y.set,
             xscrollcommand=scrollbar_x.set
@@ -1070,6 +1081,7 @@ class GUIInterface:
         tree.heading('Date', text='日期')
         tree.heading('Person', text='人员')
         tree.heading('Source', text='来源')
+        tree.heading('是否自动分类', text='是否自动分类')
         
         tree.column('Name', width=200)
         tree.column('Category', width=100)
@@ -1077,6 +1089,7 @@ class GUIInterface:
         tree.column('Date', width=100)
         tree.column('Person', width=100)
         tree.column('Source', width=80)
+        tree.column('是否自动分类', width=100)
         
         scrollbar_y.config(command=tree.yview)
         scrollbar_x.config(command=tree.xview)
@@ -1091,10 +1104,14 @@ class GUIInterface:
                 f"¥{row.get('Amount', 0):+.2f}",
                 str(row.get('Date', '')),
                 str(row.get('Person', '')),
-                str(row.get('Source', ''))
+                str(row.get('Source', '')),
+                str(row.get('是否自动分类', '否'))
             ))
         
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 保存 tree 引用以便后续刷新
+        self.result_preview_tree = tree
         
         # 统计信息标签页
         stats_frame = ttk.Frame(notebook, padding="10")
@@ -1138,6 +1155,29 @@ class GUIInterface:
         
         messagebox.showinfo("处理完成", f"账单已处理完成！\n\n导出文件：{output_file}")
     
+    def _refresh_result_preview(self, final_df):
+        """刷新数据预览窗口"""
+        if not hasattr(self, 'result_preview_tree') or self.result_preview_tree is None:
+            return
+        
+        # 清空现有数据
+        for item in self.result_preview_tree.get_children():
+            self.result_preview_tree.delete(item)
+        
+        # 插入更新后的数据
+        preview_count = min(100, len(final_df))  # 最多显示100条
+        for i in range(preview_count):
+            row = final_df.iloc[i]
+            self.result_preview_tree.insert('', tk.END, values=(
+                str(row.get('Name', ''))[:50],
+                str(row.get('Category', '')),
+                f"¥{row.get('Amount', 0):+.2f}",
+                str(row.get('Date', '')),
+                str(row.get('Person', '')),
+                str(row.get('Source', '')),
+                str(row.get('是否自动分类', '否'))
+            ))
+    
     def _on_classified_item_double_click(self, event):
         """处理已分类账单的双击事件"""
         selection = self.classified_tree.selection()
@@ -1173,6 +1213,8 @@ class GUIInterface:
         menu = tk.Menu(self.transaction_window, tearoff=0)
         menu.add_command(label="编辑", command=lambda: self._edit_classified_transaction(
             self.classified_data[self.tree_item_to_index[item_id]], item_id))
+        menu.add_separator()
+        menu.add_command(label="删除", command=lambda: self._delete_classified_transaction(item_id))
         
         try:
             menu.tk_popup(event.x_root, event.y_root)
@@ -1256,10 +1298,14 @@ class GUIInterface:
             data_entry['category'] = new_category
             data_entry['person'] = new_person
             
+            # 用户编辑后，标记为手动分类（不是自动分类）
+            data_entry['is_auto'] = False
+            
             # 更新 Treeview 显示
             current_values = list(self.classified_tree.item(item_id, 'values'))
             current_values[4] = new_category  # 分类列
             current_values[5] = new_person    # 人员列
+            current_values[6] = '否'  # 是否自动分类列（编辑后变为否）
             self.classified_tree.item(item_id, values=tuple(current_values))
             
             # 更新底层 DataFrame（如果存在）
@@ -1277,6 +1323,7 @@ class GUIInterface:
                         row_data = entry['row'].copy()
                         row_data['分类'] = entry['category']
                         row_data['人员'] = entry['person']
+                        row_data['是否自动分类'] = entry.get('is_auto', False)  # 包含是否自动分类
                         rows.append(row_data)
                     if rows:
                         self.current_processed_df = pd.DataFrame(rows)
@@ -1294,6 +1341,8 @@ class GUIInterface:
                         self.current_processed_df.loc[actual_index_label, '分类'] = new_category
                     if '人员' in self.current_processed_df.columns:
                         self.current_processed_df.loc[actual_index_label, '人员'] = new_person
+                    if '是否自动分类' in self.current_processed_df.columns:
+                        self.current_processed_df.loc[actual_index_label, '是否自动分类'] = False  # 编辑后标记为手动分类
                     
                     # 验证更新是否成功（使用实际索引标签）
                     if '分类' in self.current_processed_df.columns:
@@ -1309,50 +1358,93 @@ class GUIInterface:
                                 self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('分类')] = new_category
                             if '人员' in self.current_processed_df.columns:
                                 self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('人员')] = new_person
+                            if '是否自动分类' in self.current_processed_df.columns:
+                                self.current_processed_df.iloc[data_index, self.current_processed_df.columns.get_loc('是否自动分类')] = False
             
             # 新增：更新规则库（如果分类发生变化）
-            # 优先使用 learning_engine（即使 categorizer 为 None 也能工作）
-            learning_engine = None
-            if self.learning_engine is not None:
-                learning_engine = self.learning_engine
-            elif self.categorizer is not None:
-                learning_engine = self.categorizer.learning_engine
-            
-            if learning_engine is not None:
+            if self.categorizer is not None:
                 merchant = str(row.get('交易对方', '未知商户'))
                 amount = row.get('处理后的金额', row.get('金额(元)', 0))
-                bill_source = getattr(self.categorizer, 'current_bill_source', '其他') if self.categorizer is not None else '其他'
+                bill_source = getattr(self.categorizer, 'current_bill_source', '其他')
                 
                 # 调用学习引擎更新规则库
                 # 如果分类发生变化，使用update_existing=True来更新历史记录
                 update_existing = (new_category != old_category or new_person != old_person)
-                
-                # 调试：打印更新信息
-                print(f"[DEBUG] 更新规则库: merchant={merchant}, old_category={old_category}, new_category={new_category}, update_existing={update_existing}")
-                
                 if isinstance(amount, (int, float)):
-                    learning_engine.learn_from_decision(
+                    self.categorizer.learning_engine.learn_from_decision(
                         merchant, new_category, new_person, bill_source, amount,
                         update_existing=update_existing,
                         old_category=old_category if update_existing else None
                     )
                 else:
-                    learning_engine.learn_from_decision(
+                    self.categorizer.learning_engine.learn_from_decision(
                         merchant, new_category, new_person, bill_source, 0,
                         update_existing=update_existing,
                         old_category=old_category if update_existing else None
                     )
                 
                 # 立即保存规则库和历史记录，确保修改后的数据被持久化
-                learning_engine.save_data()
-            else:
-                messagebox.showerror("错误", "无法访问学习引擎，规则库更新失败！")
+                self.categorizer.learning_engine.save_data()
+            
+            # 如果数据预览窗口已打开，刷新它
+            if self.result_window and self.result_window.winfo_exists() and self.current_processed_df is not None and len(self.current_processed_df) > 0:
+                # 重新生成 final_df
+                if self.categorizer is not None:
+                    final_df = self.categorizer.exporter.prepare_final_dataframe(
+                        self.current_processed_df, 
+                        self.categorizer.current_bill_source, 
+                        self.categorizer.current_person
+                    )
+                    # 刷新数据预览窗口
+                    self._refresh_result_preview(final_df)
             
             dialog.destroy()
             messagebox.showinfo("成功", "分类已更新，规则库和历史记录已同步保存")
         
         ttk.Button(btn_frame, text="保存", command=save_changes).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="取消", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+    
+    def _delete_classified_transaction(self, item_id: str):
+        """删除已分类的交易"""
+        if item_id not in self.tree_item_to_index:
+            return
+        
+        # 确认删除
+        if not messagebox.askyesno("确认", "确定要删除这条记录吗？\n注意：删除后需要重新处理才能恢复。"):
+            return
+        
+        # 获取数据索引
+        data_index = self.tree_item_to_index[item_id]
+        
+        # 从 Treeview 删除
+        self.classified_tree.delete(item_id)
+        
+        # 从数据列表删除
+        if data_index < len(self.classified_data):
+            removed_entry = self.classified_data.pop(data_index)
+            
+            # 新增：从 DataFrame 中删除对应行
+            if self.current_processed_df is not None:
+                # 获取要删除的行在 DataFrame 中的实际索引
+                df_index = removed_entry['index']
+                if df_index < len(self.current_processed_df):
+                    # 从 DataFrame 中删除该行（使用iloc获取实际索引标签）
+                    actual_index_label = self.current_processed_df.index[df_index]
+                    self.current_processed_df = self.current_processed_df.drop(
+                        actual_index_label
+                    ).reset_index(drop=True)
+        
+        # 更新索引映射和重新计算 DataFrame 索引
+        self.tree_item_to_index = {}
+        # 由于 classified_data 是倒序的（最新的在顶部），需要重新映射到 DataFrame
+        for i, entry in enumerate(self.classified_data):
+            self.tree_item_to_index[entry['tree_item_id']] = i
+            # 重新计算在 DataFrame 中的实际位置
+            # classified_data[0] 对应 DataFrame 的最后一个位置
+            # classified_data[i] 对应 DataFrame 的 len(classified_data) - 1 - i
+            entry['index'] = len(self.classified_data) - 1 - i
+        
+        messagebox.showinfo("提示", "记录已从列表中删除")
     
     def run(self):
         """运行GUI主循环"""

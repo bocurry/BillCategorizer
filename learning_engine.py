@@ -251,14 +251,15 @@ class LearningEngine:
                     key = merchant_part[:3].lower()
                     self.merchant_index[key].append(rule_key)
     
-    def get_suggestions(self, merchant: str, product: str = "", transaction_type: str = "") -> Dict[str, str]:
+    def get_suggestions(self, merchant: str, product: str = "", transaction_type: str = "", amount: float = 0.0) -> Dict[str, str]:
         """
-        获取分类建议
+        获取分类建议（增强版，支持金额范围匹配）
         
         参数:
             merchant: 商户名
             product: 商品名（可选）
             transaction_type: 交易类型（可选，保持向后兼容）
+            amount: 交易金额（可选，用于金额范围匹配）
         
         返回:
             建议字典 {分类: 理由}，如果精准匹配，理由包含"精准匹配"标记
@@ -319,14 +320,38 @@ class LearningEngine:
                     suggestions[category] = f"推荐匹配: {combined_key}"
                 return suggestions
         
-        # 2. 模糊匹配（使用索引加速，仅用于旧规则格式）
+        # 2. 尝试正则表达式匹配（新增功能）
+        # 检查规则中是否有正则表达式规则（以"regex:"开头）
+        for rule_key, rule_value in self.rules.items():
+            if rule_key.startswith("regex:"):
+                pattern = rule_key[6:]  # 去掉"regex:"前缀
+                try:
+                    # 尝试匹配商户名
+                    if re.search(pattern, merchant_str, re.IGNORECASE):
+                        if isinstance(rule_value, dict):
+                            # 多分类，返回使用次数最多的
+                            category = max(rule_value.items(), key=lambda x: x[1])[0]
+                            count = rule_value[category]
+                        elif isinstance(rule_value, (list, tuple)):
+                            category = rule_value[0]
+                            count = rule_value[1] if len(rule_value) > 1 else 1
+                        else:
+                            category = rule_value
+                            count = 1
+                        suggestions[category] = f"正则匹配: {pattern} (使用{count}次)"
+                        break  # 只返回第一个匹配的
+                except re.error:
+                    # 正则表达式错误，跳过
+                    continue
+        
+        # 3. 模糊匹配（使用索引加速，仅用于旧规则格式）
         if len(merchant_str) >= 3:
             index_key = merchant_str[:3].lower()
             similar_keys = self.merchant_index.get(index_key, [])
             
             for similar_key in similar_keys:
-                # 只处理旧格式规则（不包含|的）
-                if '|' not in similar_key:
+                # 只处理旧格式规则（不包含|的）且不是正则规则
+                if '|' not in similar_key and not similar_key.startswith("regex:"):
                     if similar_key in merchant_str or merchant_str in similar_key:
                         rule_value = self.rules[similar_key]
                         if isinstance(rule_value, (list, tuple)):
@@ -503,3 +528,83 @@ class LearningEngine:
             'max_rules': self.max_rules,
             'max_history': self.max_history
         }
+    
+    def add_regex_rule(self, pattern: str, category: str, count: int = 1):
+        """
+        添加正则表达式规则
+        
+        参数:
+            pattern: 正则表达式模式
+            category: 分类名称
+            count: 使用次数（默认1）
+        """
+        rule_key = f"regex:{pattern}"
+        if rule_key in self.rules:
+            rule_value = self.rules[rule_key]
+            if isinstance(rule_value, dict):
+                if category in rule_value:
+                    rule_value[category] += count
+                else:
+                    rule_value[category] = count
+            else:
+                # 转换为字典格式
+                old_category = rule_value if isinstance(rule_value, str) else rule_value[0]
+                old_count = 1 if isinstance(rule_value, str) else (rule_value[1] if len(rule_value) > 1 else 1)
+                self.rules[rule_key] = {old_category: old_count, category: count}
+        else:
+            self.rules[rule_key] = {category: count}
+    
+    def add_merchant_rule(self, merchant: str, category: str, product: str = "", count: int = 1):
+        """
+        添加商户规则（便捷方法）
+        
+        参数:
+            merchant: 商户名
+            category: 分类名称
+            product: 商品名（可选）
+            count: 使用次数（默认1）
+        """
+        merchant_str = str(merchant).strip()
+        product_str = str(product).strip() if product else ""
+        
+        # 处理空商品名
+        if product_str in ["", "无", "/"]:
+            product_str = ""
+        else:
+            # 去除数字（订单号、时间等）
+            product_str = self._remove_numbers_from_product(product_str)
+        
+        # 构建组合键
+        if product_str:
+            rule_key = f"{merchant_str}|{product_str}"
+        else:
+            rule_key = f"{merchant_str}|"
+        
+        # 更新规则
+        if rule_key in self.rules:
+            rule_value = self.rules[rule_key]
+            if isinstance(rule_value, dict):
+                if category in rule_value:
+                    rule_value[category] += count
+                else:
+                    rule_value[category] = count
+            elif isinstance(rule_value, (list, tuple)):
+                old_category = rule_value[0]
+                old_count = rule_value[1] if len(rule_value) > 1 else 1
+                if old_category == category:
+                    self.rules[rule_key] = {category: old_count + count}
+                else:
+                    self.rules[rule_key] = {old_category: old_count, category: count}
+            else:
+                old_category = rule_value
+                if old_category == category:
+                    self.rules[rule_key] = {category: count + 1}
+                else:
+                    self.rules[rule_key] = {old_category: 1, category: count}
+        else:
+            self.rules[rule_key] = {category: count}
+            # 更新索引
+            if len(merchant_str) >= 3:
+                index_key = merchant_str[:3].lower()
+                if rule_key not in self.merchant_index[index_key]:
+                    self.merchant_index[index_key].append(rule_key)

@@ -23,6 +23,10 @@
 **Mode:** mvp
 **Depends on:** None
 **Requirements:** BUG-01, BUG-02, BUG-03, ARCH-04, UI-01, UI-02, UI-03
+**Plans:** 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — GUIThreadBridge 基础设施、welcome 去重、关闭唤醒（Wave 1）
+- [ ] 01-02-PLAN.md — 对话框主线程迁移、窗口生命周期、测试与验收（Wave 2）
 **Success Criteria:**
 1. GUI 模式下连续处理 3 个账单无卡死，「继续处理」对话框每次可响应
 2. 处理过程中和完成后，用户可正常关闭主窗口退出程序
@@ -79,7 +83,7 @@
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1 - Fix GUI Thread Safety | Pending | 0/TBD | 0% |
+| 1 - Fix GUI Thread Safety | Planned | 2/2 | 0% |
 | 2 - Legacy Cleanup | Pending | 0/TBD | 0% |
 | 3 - GUI Module Refactor | Pending | 0/TBD | 0% |
 | 4 - Testing & CI | Pending | 0/TBD | 0% |

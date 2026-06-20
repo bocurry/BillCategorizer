@@ -67,7 +67,7 @@ Plans:
 **Mode:** mvp
 **Depends on:** Phase 1, Phase 2
 **Requirements:** TEST-01, TEST-02, TEST-03, TEST-04
-**Status:** Complete (2026-06-20, pending CI green)
+**Status:** Complete (2026-06-20, CI green run #19)
 **Success Criteria:**
 1. `learning_engine.py` 和 `categorizer.py` 有单元测试且本地通过
 2. GUI 多账单流程有冒烟测试（可 mock tkinter）

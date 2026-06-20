@@ -30,7 +30,7 @@
 
 - [x] **TEST-01**: 核心分类逻辑（`learning_engine.py`、`categorizer.py`）有单元测试覆盖
 - [x] **TEST-02**: GUI 多账单流程有自动化冒烟测试（可 mock tkinter）
-- [ ] **TEST-03**: GitHub Actions CI 流水线（pytest + flake8 + PyInstaller）稳定通过
+- [x] **TEST-03**: GitHub Actions CI 流水线（pytest + flake8 + PyInstaller）稳定通过
 - [x] **TEST-04**: 添加 `.gitignore`，排除个人账单数据、构建产物、venv
 
 ### Documentation & Packaging

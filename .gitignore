@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Build / distribution
+build/
+dist/
+*.exe
+*.spec.bak
+
+# IDE / local tooling
+.cursor/
+.vscode/
+.idea/
+bill/
+
+# Runtime data & personal bills (do not commit)
+bill_history.json
+bill_rules_optimized.json
+原始账单/
+已分类/
+分类明细/
+*.csv
+*.xlsx
+!environment.yml
+
+# Logs
+build_log.txt
+*.log
+
+# Nested legacy copy (Phase 2 cleanup target)
+BillCategorizer/

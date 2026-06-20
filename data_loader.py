@@ -21,6 +21,29 @@ class DataLoader:
         """
         self.config = config_manager
 
+    @staticmethod
+    def detect_bill_source_from_path(filepath: str) -> Optional[str]:
+        """根据文件名推断账单来源。"""
+        name = os.path.basename(filepath)
+        if '支付宝' in name:
+            return '支付宝'
+        if '微信' in name:
+            return '微信'
+        if '银行' in name:
+            return '银行'
+        return None
+
+    def resolve_bill_source(self, filepath: str, selected_source: str) -> str:
+        """在选定来源与文件名推断不一致时，优先采用文件名推断。"""
+        detected = self.detect_bill_source_from_path(filepath)
+        if detected and detected != selected_source:
+            print(
+                f'⚠️  文件名推断来源为「{detected}」，与所选「{selected_source}」不一致，'
+                f'已自动切换为「{detected}」'
+            )
+            return detected
+        return selected_source
+
     def load_excel_file(
         self, filepath: str, bill_source: str
     ) -> Optional[pd.DataFrame]:
@@ -549,8 +572,14 @@ class DataLoader:
         print(f"❌ {bill_source}CSV读取失败")
         return None
 
-    def find_excel_files(self, directory: str = ".") -> list:
+    def find_excel_files(self, directory: str = None) -> list:
         """查找目录中的Excel账单文件"""
+        if directory is None:
+            try:
+                from app_paths import get_app_dir
+                directory = str(get_app_dir())
+            except ImportError:
+                directory = "."
         excel_files = []
         # 使用 os.walk 递归搜索所有子目录
         for root, dirs, files in os.walk(directory):

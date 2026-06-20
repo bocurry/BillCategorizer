@@ -78,8 +78,14 @@ except ImportError as e:
     sys.exit(1)
 
 
-def main(use_gui=True):
+def main(use_gui=True, merge_master=False):
     """主函数"""
+    try:
+        from app_paths import set_working_directory
+        set_working_directory()
+    except ImportError:
+        pass
+
     try:
         # 检查必要库
         try:
@@ -125,6 +131,7 @@ def main(use_gui=True):
             learning_engine=learning_engine,
             user_interface=user_interface,
             data_exporter=data_exporter,
+            merge_master=merge_master,
         )
 
         # 4. 运行分类器
@@ -133,19 +140,18 @@ def main(use_gui=True):
             # 注意：tkinter必须在主线程中运行，所以GUI主循环在主线程
             import threading
             
-            # 先显示欢迎界面
-            user_interface.display_welcome()
-            user_interface.root.update()
-            
             def run_categorizer():
                 try:
                     categorizer.run()
                 except Exception as e:
-                    import tkinter.messagebox as msgbox
                     try:
-                        msgbox.showerror("错误", f"处理过程中出错: {e}")
-                    except:
-                        # 如果无法显示消息框，至少打印错误
+                        user_interface.run_on_main_thread(
+                            lambda: __import__('tkinter.messagebox', fromlist=['showerror']).showerror(
+                                "错误", f"处理过程中出错: {e}"
+                            ),
+                            default_on_stop=None,
+                        )
+                    except Exception:
                         print(f"处理过程中出错: {e}")
                     traceback.print_exc()
             
@@ -158,6 +164,7 @@ def main(use_gui=True):
             
             # 使用after方法在主线程中延迟启动分类器
             user_interface.root.after(100, start_categorizer)
+            print("🚀 程序已启动，请在弹出窗口中操作（若看不到窗口，请检查任务栏）。")
             
             # 运行GUI主循环（必须在主线程）
             user_interface.run()
@@ -187,7 +194,11 @@ def main(use_gui=True):
 if __name__ == "__main__":
     # 检查命令行参数，支持 --cli 参数使用命令行模式
     use_gui = True
-    if len(sys.argv) > 1 and '--cli' in sys.argv:
-        use_gui = False
+    merge_master = False
+    if len(sys.argv) > 1:
+        if '--cli' in sys.argv:
+            use_gui = False
+        if '--merge-master' in sys.argv:
+            merge_master = True
     
-    main(use_gui=use_gui)
+    main(use_gui=use_gui, merge_master=merge_master)

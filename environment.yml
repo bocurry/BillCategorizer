@@ -9,3 +9,4 @@ dependencies:
   - pip:
     - pytest
     - flake8
+    - python-docx

@@ -16,18 +16,18 @@ BillCategorizer 是一个面向个人/家庭使用的智能账单分类桌面工
 - ✓ 渐进式学习分类规则（`learning_engine.py` + `bill_rules_optimized.json`）— existing
 - ✓ CLI 与 GUI 双模式运行（`main.py --cli` / 默认 GUI）— existing
 - ✓ 导出命名格式 `用户名-月份-来源-已分类账单.csv` — existing
-- ✓ 批处理多个账单文件（循环处理）— existing（CLI 稳定；GUI 有已知缺陷）
+- ✓ 批处理多个账单文件（循环处理）— Phase 1 修复 GUI 多账单流程
 - ✓ PyInstaller 打包入口为 `main.py` — existing
+- ✓ GUI 多账单连续处理不卡死、可正常关闭窗口 — Phase 1 (2026-06-15)
+- ✓ tkinter 主线程调度（run_on_main_thread / task_queue）— Phase 1 (2026-06-15)
+- ✓ GUI 多账单自动化冒烟测试（test_gui.py + test_phase1_integration.py）— Phase 1
 
 ### Active
 
-- [ ] 修复 GUI 处理完第一个账单后偶发卡死、无法继续/关闭的 bug
-- [ ] 将 GUI 所有 UI 调用调度到主线程（修复 tkinter 线程安全问题）
 - [ ] 清理遗留单体 `WeChatBillCategorizer.py`，统一为模块化架构
 - [ ] 解决嵌套重复目录 `BillCategorizer/` 造成的混淆
-- [ ] 拆分 oversized `gui_interface.py`，改进交互体验
-- [ ] 补充核心逻辑与 GUI 多账单流程的自动化测试
-- [ ] 修复并稳定 CI 流水线（pytest + flake8 + PyInstaller）
+- [ ] 拆分 oversized `gui_interface.py`，改进交互体验（含 UI 流畅性优化）
+- [ ] 补充核心逻辑单元测试与 CI 流水线
 - [ ] 更新 README 与文档，使其与真实目录结构一致
 - [ ] 添加 `.gitignore`，避免个人账单数据入库
 - [ ] 改进 PyInstaller 打包与发布流程

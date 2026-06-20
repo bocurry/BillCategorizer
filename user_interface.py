@@ -133,6 +133,14 @@ class UserInterface:
         print(f"✅ 账单来源: {selected_source}")
         return selected_source
     
+    def show_error(self, message: str):
+        """显示错误信息（CLI）。"""
+        print(f"❌ {message}")
+
+    def show_info(self, message: str):
+        """显示提示信息（CLI）。"""
+        print(f"ℹ️  {message}")
+
     def ask_continue_processing(self) -> bool:
         """询问用户是否继续处理下一个账单"""
         print("\n" + "="*70)
@@ -227,3 +235,10 @@ class UserInterface:
         if current > 0 and current % 10 == 0:
             percentage = current / total * 100
             print(f"⏳ 进度: {current}/{total} ({percentage:.1f}%)")
+
+    def should_merge_to_master(self) -> bool:
+        return bool(self.config.get('master_spreadsheet.enabled', False))
+
+    def ask_merge_to_master(self) -> bool:
+        answer = input("\n是否同步到年度总表? (y/n，默认 n): ").strip().lower()
+        return answer in ('y', 'yes', '是')

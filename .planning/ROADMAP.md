@@ -12,7 +12,7 @@
 |---|-------|------|--------------|------------------|
 | 1 | Fix GUI Thread Safety | 修复多账单 GUI 卡死，恢复稳定可用 | BUG-01~03, ARCH-04, UI-01~03 | 5 |
 | 2 | Legacy Cleanup | 统一入口，清除重复代码 | ARCH-01~03 | 4 |
-| 3 | GUI Module Refactor | 拆分 gui_interface，改进体验 | ARCH-05 | 3 |
+| 3 | GUI Module Refactor | UI 流畅性 + 拆分 gui_interface | UI-04, ARCH-05 | 3 |
 | 4 | Testing & CI | 建立测试基线与稳定 CI | TEST-01~04 | 4 |
 | 5 | Docs & Packaging | 文档对齐、打包发布就绪 | DOC-01~04 | 4 |
 
@@ -25,8 +25,9 @@
 **Requirements:** BUG-01, BUG-02, BUG-03, ARCH-04, UI-01, UI-02, UI-03
 **Plans:** 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — GUIThreadBridge 基础设施、welcome 去重、关闭唤醒（Wave 1）
-- [ ] 01-02-PLAN.md — 对话框主线程迁移、窗口生命周期、测试与验收（Wave 2）
+- [x] 01-01-PLAN.md — GUIThreadBridge 基础设施、welcome 去重、关闭唤醒（Wave 1）
+- [x] 01-02-PLAN.md — 对话框主线程迁移、窗口生命周期、测试与验收（Wave 2）
+**Status:** Complete (2026-06-15, user approved)
 **Success Criteria:**
 1. GUI 模式下连续处理 3 个账单无卡死，「继续处理」对话框每次可响应
 2. 处理过程中和完成后，用户可正常关闭主窗口退出程序
@@ -46,14 +47,19 @@ Plans:
 4. 现有 `bill_rules_optimized.json` 规则库在重构后仍正常工作
 
 ### Phase 3: GUI Module Refactor
-**Goal:** 拆分 oversized `gui_interface.py`，改善可维护性与交互体验
+**Goal:** 优化逐笔 UI 流畅性并拆分 oversized `gui_interface.py`，改善可维护性与交互体验
 **Mode:** mvp
 **Depends on:** Phase 1
-**Requirements:** ARCH-05
+**Requirements:** UI-04, ARCH-05
+**Plans:** 2 plans
+Plans:
+- [x] 03-01-PLAN.md — UI 性能优化（Label 复用、分类菜单缓存、增量 Treeview、进度节流）（Wave 1）
+- [x] 03-02-PLAN.md — gui/ 包模块拆分 + 人工回归（Wave 2）
+**Status:** Complete (2026-06-08, user approved)
 **Success Criteria:**
-1. `gui_interface.py` 拆分为 3+ 职责清晰的模块，单文件不超过 500 行
-2. Phase 1 修复的线程安全模式在新模块结构中保持
-3. 分类列表编辑、交易处理、结果预览功能回归正常
+1. 大账单（100+ 笔，80% 自动分类）处理时 UI 可响应，无明显逐笔卡顿
+2. `gui_interface.py` 拆分为 3+ 职责清晰模块（gui/ 包），单文件不超过 500 行
+3. Phase 1 线程安全模式在新模块结构中保持；分类编辑、结果预览回归正常
 
 ### Phase 4: Testing & CI
 **Goal:** 建立自动化测试基线，修复并稳定 CI 流水线
@@ -83,9 +89,9 @@ Plans:
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1 - Fix GUI Thread Safety | Planned | 2/2 | 0% |
+| 1 - Fix GUI Thread Safety | **Complete** | 2/2 | 100% |
 | 2 - Legacy Cleanup | Pending | 0/TBD | 0% |
-| 3 - GUI Module Refactor | Pending | 0/TBD | 0% |
+| 3 - GUI Module Refactor | **Complete** | 2/2 | 100% |
 | 4 - Testing & CI | Pending | 0/TBD | 0% |
 | 5 - Docs & Packaging | Pending | 0/TBD | 0% |
 

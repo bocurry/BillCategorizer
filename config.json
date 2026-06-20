@@ -1,11 +1,71 @@
 {
+  "files": {
+    "rules_file": "bill_rules_optimized.json",
+    "history_file": "bill_history.json",
+    "notion_config_file": "notion_config.json",
+    "export_dir": "已分类/{year}"
+  },
+  "limits": {
+    "max_rules": 50000,
+    "max_history": 5000
+  },
   "categories": {
+    "bill_sources": [
+      "微信",
+      "支付宝",
+      "银行",
+      "现金",
+      "其他"
+    ],
+    "people_options": [
+      "男主人",
+      "女主人",
+      "家庭公用",
+      "袁程波",
+      "杜雨秦"
+    ],
     "base_categories": [
-      "餐饮", "出行", "住房贷款", "购物", "生活缴费",
-      "娱乐", "医疗", "学习", "人情往来", "汽车",
-      "投资", "其他消费", "工资", "其他", "父母",
-      "党费", "运动", "其他收入", "旅游", "服务", "公积金",
-      "贷款", "山姆&盒马", "水果&超市", "买菜"
+      "餐饮",
+      "出行",
+      "住房贷款",
+      "购物",
+      "生活缴费",
+      "娱乐",
+      "医疗",
+      "学习",
+      "人情往来",
+      "汽车",
+      "投资",
+      "其他消费",
+      "工资",
+      "其他",
+      "父母",
+      "党费",
+      "运动",
+      "其他收入",
+      "旅游",
+      "服务",
+      "公积金",
+      "贷款",
+      "山姆&盒马",
+      "水果&超市",
+      "买菜",
+      "测试",
+      "骑行",
+      "退款",
+      "单位垫款"
     ]
+  },
+  "display": {
+    "preview_count": 5,
+    "progress_interval": 10
+  },
+  "master_spreadsheet": {
+    "enabled": false,
+    "path": "已分类/{year}/{year}总表.xlsx",
+    "sheet_naming": "{month}",
+    "dedupe_keys": ["Date", "Amount", "Name"],
+    "prompt_before_merge": true,
+    "backup_before_merge": true
   }
 }

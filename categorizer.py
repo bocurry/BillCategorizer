@@ -11,17 +11,44 @@ from typing import Tuple, Optional, Dict, List
 class BillCategorizer:
     """账单分类器 - 主控制器"""
     
-    def __init__(self, config_manager, data_loader, learning_engine, user_interface, data_exporter):
+    def __init__(self, config_manager, data_loader, learning_engine, user_interface, data_exporter,
+                 merge_master: bool = False):
         self.config = config_manager
         self.data_loader = data_loader
         self.learning_engine = learning_engine
         self.ui = user_interface
         self.exporter = data_exporter
+        self.merge_master = merge_master
+
+        from master_spreadsheet import MasterSpreadsheetMerger
+        self.master_merger = MasterSpreadsheetMerger(config_manager)
         
         # 处理状态
         self.stats = defaultdict(int)
         self.current_bill_source = ""
         self.current_person = ""
+    
+    def _reset_gui_for_next_bill(self):
+        """重置 GUI 状态以处理下一个账单。"""
+        if hasattr(self.ui, 'run_on_main_thread'):
+            self.ui.run_on_main_thread(self._reset_gui_for_next_bill_impl)
+        else:
+            self._reset_gui_for_next_bill_impl()
+
+    def _reset_gui_for_next_bill_impl(self):
+        """在主线程重置 GUI 组件状态。"""
+        if hasattr(self.ui, 'reset_bill_processing_state'):
+            self.ui.reset_bill_processing_state()
+        elif hasattr(self.ui, 'classified_data'):
+            self.ui.classified_data = []
+            self.ui.tree_item_to_index = {}
+        if hasattr(self.ui, 'result_window') and self.ui.result_window:
+            try:
+                if self.ui.result_window.winfo_exists():
+                    self.ui.result_window.destroy()
+            except Exception:
+                pass
+            self.ui.result_window = None
     
     def run(self):
         """主运行函数 - 支持批处理多个账单"""
@@ -34,11 +61,14 @@ class BillCategorizer:
                 break
             
             if first_run:
-                self.ui.display_welcome()
+                if not hasattr(self.ui, 'show_results'):
+                    self.ui.display_welcome()
                 first_run = False
             else:
                 # 重置统计信息，准备处理下一个账单
                 self.stats = defaultdict(int)
+                if hasattr(self.ui, 'show_results'):
+                    self._reset_gui_for_next_bill()
             
             # 检查停止标志
             if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
@@ -46,6 +76,14 @@ class BillCategorizer:
             
             # 1. 选择账单来源
             self.current_bill_source = self.ui.select_bill_source()
+            if not self.current_bill_source:
+                if hasattr(self.ui, 'show_results'):
+                    if not self.ui.ask_continue_processing():
+                        break
+                else:
+                    if not self.ui.ask_continue_processing():
+                        break
+                continue
             
             # 检查停止标志
             if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
@@ -69,6 +107,10 @@ class BillCategorizer:
                     if not self.ui.ask_continue_processing():
                         break
                 continue
+
+            self.current_bill_source = self.data_loader.resolve_bill_source(
+                selected_file, self.current_bill_source
+            )
             
             # 检查停止标志
             if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
@@ -83,8 +125,7 @@ class BillCategorizer:
                     if not self.ui.ask_continue_processing():
                         break
                 else:
-                    import tkinter.messagebox as msgbox
-                    msgbox.showerror("错误", "读取文件失败")
+                    self.ui.show_error("读取文件失败")
                     if not self.ui.ask_continue_processing():
                         break
                 continue
@@ -118,14 +159,26 @@ class BillCategorizer:
                 # 用户提前退出，没有处理任何数据
                 is_gui = hasattr(self.ui, 'show_results')
                 if is_gui:
-                    import tkinter.messagebox as msgbox
-                    msgbox.showinfo("提示", "已取消处理，未保存任何数据")
+                    self.ui.show_info("已取消处理，未保存任何数据")
                     # 关闭交易窗口
-                    if hasattr(self.ui, 'transaction_window') and self.ui.transaction_window:
+                    if hasattr(self.ui, '_destroy_transaction_window'):
+                        if hasattr(self.ui, 'run_on_main_thread'):
+                            self.ui.run_on_main_thread(self.ui._destroy_transaction_window)
+                        else:
+                            self.ui._destroy_transaction_window()
+                    elif hasattr(self.ui, 'transaction_window') and self.ui.transaction_window:
                         try:
-                            self.ui.transaction_window.destroy()
-                        except:
+                            if hasattr(self.ui, 'run_on_main_thread'):
+                                self.ui.run_on_main_thread(
+                                    lambda: self.ui.transaction_window.destroy()
+                                    if self.ui.transaction_window and self.ui.transaction_window.winfo_exists()
+                                    else None
+                                )
+                            else:
+                                self.ui.transaction_window.destroy()
+                        except Exception:
                             pass
+                        self.ui.transaction_window = None
                 else:
                     print("\n⚠️  已取消处理，未保存任何数据")
                 
@@ -151,16 +204,20 @@ class BillCategorizer:
             
             final_df = self.exporter.prepare_final_dataframe(export_df, self.current_bill_source, self.current_person)
             output_file = self.exporter.export_to_csv(final_df, self.current_bill_source)
+            merge_result = self._maybe_merge_to_master(final_df)
             
-            # 8. 显示结果
-            self._display_results(final_df, output_file)
+            # 8. 显示结果（GUI 模式在同一窗口询问是否继续）
+            should_continue = self._display_results(final_df, output_file, merge_result)
             
             # 检查停止标志
             if hasattr(self.ui, 'should_stop') and self.ui.should_stop:
                 break
             
             # 9. 询问是否继续处理下一个账单
-            if not self.ui.ask_continue_processing():
+            if should_continue is not None:
+                if not should_continue:
+                    break
+            elif not self.ui.ask_continue_processing():
                 break
         
         # 所有处理完成
@@ -173,15 +230,16 @@ class BillCategorizer:
         # 检查是否是GUI模式
         is_gui = hasattr(self.ui, 'show_results')
         
-        # 新增：清空之前的已分类数据
+        # 清空之前的已分类数据
         if is_gui:
-            if hasattr(self.ui, 'classified_data'):
+            if hasattr(self.ui, 'reset_bill_processing_state'):
+                if hasattr(self.ui, 'run_on_main_thread'):
+                    self.ui.run_on_main_thread(self.ui.reset_bill_processing_state)
+                else:
+                    self.ui.reset_bill_processing_state()
+            elif hasattr(self.ui, 'classified_data'):
                 self.ui.classified_data = []
                 self.ui.tree_item_to_index = {}
-                if hasattr(self.ui, 'classified_tree') and self.ui.classified_tree:
-                    # 清空 Treeview
-                    for item in self.ui.classified_tree.get_children():
-                        self.ui.classified_tree.delete(item)
         
         if not is_gui:
             print("\n🚀 开始分类处理...")
@@ -199,7 +257,7 @@ class BillCategorizer:
             self.stats['total'] += 1
             
             # 显示进度
-            self.ui.display_progress(idx, len(df))
+            self.ui.display_progress(self.stats['total'], len(df))
             
             # 处理单条交易
             category, person, is_auto = self._process_single_transaction(
@@ -217,10 +275,35 @@ class BillCategorizer:
             
             # GUI模式下，更新界面并添加到已分类列表
             if is_gui and hasattr(self.ui, 'root'):
-                # 添加已分类的交易到列表
-                if hasattr(self.ui, 'add_classified_transaction'):
-                    self.ui.add_classified_transaction(row, category, person, is_auto)
-                self.ui.root.update_idletasks()
+                if is_auto and hasattr(self.ui, 'defer_classified_transaction'):
+                    if hasattr(self.ui, 'run_on_main_thread'):
+                        self.ui.run_on_main_thread(
+                            self.ui.defer_classified_transaction,
+                            row, category, person, is_auto, self.stats['total'], len(df),
+                        )
+                    else:
+                        self.ui.defer_classified_transaction(
+                            row, category, person, is_auto, self.stats['total'], len(df)
+                        )
+                elif hasattr(self.ui, 'add_classified_transaction'):
+                    if hasattr(self.ui, 'flush_deferred_classified_transactions'):
+                        if hasattr(self.ui, 'run_on_main_thread'):
+                            self.ui.run_on_main_thread(self.ui.flush_deferred_classified_transactions)
+                        else:
+                            self.ui.flush_deferred_classified_transactions()
+                    if hasattr(self.ui, 'run_on_main_thread'):
+                        self.ui.run_on_main_thread(
+                            self.ui.add_classified_transaction,
+                            row, category, person, is_auto,
+                        )
+                    else:
+                        self.ui.add_classified_transaction(row, category, person, is_auto)
+        
+        if is_gui and hasattr(self.ui, 'flush_deferred_classified_transactions'):
+            if hasattr(self.ui, 'run_on_main_thread'):
+                self.ui.run_on_main_thread(self.ui.flush_deferred_classified_transactions)
+            else:
+                self.ui.flush_deferred_classified_transactions()
         
         # 添加结果列（只添加已处理的记录）
         # 如果用户提前退出，categories和persons的长度可能小于df的长度
@@ -387,13 +470,40 @@ class BillCategorizer:
         
         return category, person, is_auto
     
-    def _display_results(self, final_df: pd.DataFrame, output_file: str):
-        """显示处理结果"""
+    def _should_merge_to_master(self) -> bool:
+        if self.merge_master:
+            return True
+        if hasattr(self.ui, 'should_merge_to_master'):
+            return bool(self.ui.should_merge_to_master())
+        return self.master_merger.is_enabled()
+
+    def _maybe_merge_to_master(self, final_df: pd.DataFrame):
+        if not self._should_merge_to_master():
+            return None
+
+        is_gui = hasattr(self.ui, 'show_results')
+        prompt = bool(self.config.get('master_spreadsheet.prompt_before_merge', True))
+        if prompt and not is_gui and hasattr(self.ui, 'ask_merge_to_master'):
+            if not self.ui.ask_merge_to_master():
+                return None
+
+        result = self.master_merger.merge_dataframe(final_df)
+        if not result.success:
+            if hasattr(self.ui, 'show_error'):
+                self.ui.show_error(f'总表合并失败: {result.error}')
+            else:
+                print(f'❌ 总表合并失败: {result.error}')
+        return result
+
+    def _display_results(self, final_df: pd.DataFrame, output_file: str, merge_result=None):
+        """显示处理结果。GUI 模式返回是否继续；CLI 模式返回 None。"""
         # 检查是否是GUI界面
         if hasattr(self.ui, 'show_results'):
-            # GUI模式：使用GUI显示结果
+            # GUI模式：使用GUI显示结果，并在结果窗口询问是否继续
             engine_stats = self.learning_engine.get_statistics()
-            self.ui.show_results(final_df, output_file, self.stats, engine_stats)
+            return self.ui.show_results(
+                final_df, output_file, self.stats, engine_stats, merge_result
+            )
         else:
             # CLI模式：使用命令行显示
             # 显示预览
@@ -407,6 +517,13 @@ class BillCategorizer:
             engine_stats = self.learning_engine.get_statistics()
             print(f"  当前规则数: {engine_stats['total_rules']} / {engine_stats['max_rules']}")
             print(f"  历史记录数: {engine_stats['total_history']} / {engine_stats['max_history']}")
+
+            if merge_result is not None:
+                if merge_result.success:
+                    print(f"\n📊 {merge_result.summary()}")
+                else:
+                    print(f"\n❌ {merge_result.summary()}")
+        return None
     
     def _display_statistics(self, df: pd.DataFrame):
         """显示统计信息"""

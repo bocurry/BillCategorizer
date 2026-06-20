@@ -31,19 +31,30 @@ def _setup_utf8_encoding():
                 errors="replace",
                 line_buffering=True,
             )
-    except (AttributeError, IOError, ValueError) as e:
+    except (AttributeError, IOError, ValueError):
         # 如果设置失败，静默忽略，不影响程序主体运行
         pass
 
-    # 调用设置函数
-    _setup_utf8_encoding()
+
+_setup_utf8_encoding()
 
 
 class ConfigManager:
     """配置管理器"""
 
-    def __init__(self, config_dir: str = "."):
+    def __init__(self, config_dir: str = None):
+        if config_dir is None:
+            try:
+                from app_paths import get_app_dir
+                config_dir = str(get_app_dir())
+            except ImportError:
+                config_dir = "."
         self.config_dir = config_dir
+        try:
+            from app_paths import ensure_runtime_files
+            ensure_runtime_files()
+        except ImportError:
+            pass
 
         # 默认配置
         self.default_config = {
@@ -52,6 +63,7 @@ class ConfigManager:
                 "rules_file": "bill_rules_optimized.json",
                 "history_file": "bill_history.json",
                 "notion_config_file": "notion_config.json",
+                "export_dir": "已分类/{year}",
             },
             # 性能限制
             "limits": {"max_rules": 50000, "max_history": 5000},
@@ -89,6 +101,15 @@ class ConfigManager:
             },
             # 显示配置
             "display": {"preview_count": 5, "progress_interval": 10},
+            # 年度总表合并
+            "master_spreadsheet": {
+                "enabled": False,
+                "path": "已分类/{year}/{year}总表.xlsx",
+                "sheet_naming": "{month}",
+                "dedupe_keys": ["Date", "Amount", "Name"],
+                "prompt_before_merge": True,
+                "backup_before_merge": True,
+            },
         }
 
         # 运行时配置

@@ -7,23 +7,24 @@
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: 用户可在 GUI 模式下连续处理多个账单，「继续处理」对话框始终可响应
-- [ ] **BUG-02**: 用户可在任意时刻正常关闭 GUI 主窗口，无需 Ctrl+C 强制退出
-- [ ] **BUG-03**: GUI 启动时欢迎界面不重复显示
+- [x] **BUG-01**: 用户可在 GUI 模式下连续处理多个账单，「继续处理」对话框始终可响应
+- [x] **BUG-02**: 用户可在任意时刻正常关闭 GUI 主窗口，无需 Ctrl+C 强制退出
+- [x] **BUG-03**: GUI 启动时欢迎界面不重复显示
 
 ### Architecture
 
 - [ ] **ARCH-01**: 应用仅有唯一正式入口 `main.py`（文档与打包一致）
 - [ ] **ARCH-02**: 遗留单体 `WeChatBillCategorizer.py` 已移除或明确弃用，逻辑无遗漏迁移
 - [ ] **ARCH-03**: 嵌套重复目录 `BillCategorizer/` 已清理，消除双份源码混淆
-- [ ] **ARCH-04**: 所有 tkinter UI 调用通过主线程调度（`root.after` 或 task_queue），工作线程不直接操作 widget
-- [ ] **ARCH-05**: `gui_interface.py` 拆分为职责清晰的子模块（对话框、交易面板、分类列表等）
+- [x] **ARCH-04**: 所有 tkinter UI 调用通过主线程调度（`root.after` 或 task_queue），工作线程不直接操作 widget
+- [x] **ARCH-05**: `gui_interface.py` 拆分为职责清晰的子模块（对话框、交易面板、分类列表等）
 
 ### User Interface
 
-- [ ] **UI-01**: 「继续处理下一个账单」流程在 GUI 中体验流畅，有明确的状态反馈
-- [ ] **UI-02**: 处理完成后结果预览与统计信息正常展示，不阻塞后续操作
-- [ ] **UI-03**: CLI 模式 (`--cli`) 行为与重构前保持一致，作为 GUI 的可靠备选
+- [x] **UI-01**: 「继续处理下一个账单」流程在 GUI 中体验流畅，有明确的状态反馈
+- [x] **UI-02**: 处理完成后结果预览与统计信息正常展示，不阻塞后续操作
+- [x] **UI-03**: CLI 模式 (`--cli`) 行为与重构前保持一致，作为 GUI 的可靠备选
+- [x] **UI-04**: 逐笔分类时 UI 流畅，自动分类路径无全量 destroy/recreate 卡顿
 
 ### Testing & CI
 
@@ -36,7 +37,7 @@
 
 - [ ] **DOC-01**: `README.md` 反映真实目录结构、运行方式（GUI/CLI）、依赖安装步骤
 - [ ] **DOC-02**: `ARCHITECTURE.md` 与代码一致，或合并到 `.planning/codebase/` 引用
-- [ ] **DOC-03**: PyInstaller 打包流程文档化，`build.spec` 经验证可产出可执行文件
+- [x] **DOC-03**: PyInstaller 打包流程文档化，`build.spec` 经验证可产出可执行文件
 - [ ] **DOC-04**: 移除 README 中对不存在模块（如 `notion_integration.py`）的引用
 
 ## v2 Requirements
@@ -63,24 +64,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 1 | Pending |
-| BUG-02 | Phase 1 | Pending |
-| BUG-03 | Phase 1 | Pending |
-| ARCH-04 | Phase 1 | Pending |
-| UI-01 | Phase 1 | Pending |
-| UI-02 | Phase 1 | Pending |
-| UI-03 | Phase 1 | Pending |
+| BUG-01 | Phase 1 | Done |
+| BUG-02 | Phase 1 | Done |
+| BUG-03 | Phase 1 | Done |
+| ARCH-04 | Phase 1 | Done |
+| UI-01 | Phase 1 | Done |
+| UI-02 | Phase 1 | Done |
+| UI-03 | Phase 1 | Done |
+| UI-04 | Phase 3 | Done |
 | ARCH-01 | Phase 2 | Pending |
 | ARCH-02 | Phase 2 | Pending |
 | ARCH-03 | Phase 2 | Pending |
-| ARCH-05 | Phase 3 | Pending |
+| ARCH-05 | Phase 3 | Done |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
 | TEST-03 | Phase 4 | Pending |
 | TEST-04 | Phase 4 | Pending |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
+| DOC-03 | Phase 5 | Done |
 | DOC-04 | Phase 5 | Pending |
 
 **Coverage:**
@@ -90,4 +92,4 @@
 
 ---
 *Requirements defined: 2026-06-08*
-*Last updated: 2026-06-08 after initial definition*
+*Last updated: 2026-06-19 — UI-04 marked Done (Phase 3 Wave 1)*

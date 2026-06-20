@@ -36,7 +36,7 @@
 ### Documentation & Packaging
 
 - [x] **DOC-01**: `README.md` 反映真实目录结构、运行方式（GUI/CLI）、依赖安装步骤
-- [ ] **DOC-02**: `ARCHITECTURE.md` 与代码一致，或合并到 `.planning/codebase/` 引用
+- [x] **DOC-02**: `ARCHITECTURE.md` 与代码一致，或合并到 `.planning/codebase/` 引用
 - [x] **DOC-03**: PyInstaller 打包流程文档化，`build.spec` 经验证可产出可执行文件
 - [x] **DOC-04**: 移除 README 中对不存在模块（如 `notion_integration.py`）的引用
 
@@ -78,10 +78,10 @@
 | ARCH-05 | Phase 3 | Done |
 | TEST-01 | Phase 4 | Done |
 | TEST-02 | Phase 4 | Done |
-| TEST-03 | Phase 4 | Pending CI |
+| TEST-03 | Phase 4 | Done |
 | TEST-04 | Phase 4 | Done |
 | DOC-01 | Phase 5 | Done |
-| DOC-02 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Done |
 | DOC-03 | Phase 5 | Done |
 | DOC-04 | Phase 5 | Done |
 

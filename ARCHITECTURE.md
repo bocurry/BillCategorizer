@@ -1,595 +1,272 @@
-# 账单自动分类助手 - 架构与流程文档
+# BillCategorizer — 架构与流程文档
 
 ## 1. 项目概述
 
-账单自动分类助手是一个智能交互式账单分类工具，支持微信、支付宝等多种账单来源。通过渐进式学习用户的分类习惯，自动对交易记录进行分类，并导出结构化数据。
+BillCategorizer 是面向个人/家庭使用的智能账单分类桌面工具，支持微信、支付宝账单导入与交互式分类。通过渐进式学习用户分类习惯，自动对交易记录分类，并导出结构化 CSV；可选合并到年度 Excel 总表。
 
 ### 主要特性
-- 支持微信、支付宝账单（Excel/CSV格式）
-- GUI图形界面和CLI命令行双模式
-- 智能学习：自动记忆分类规则，越用越智能
-- 递归搜索：支持子目录中的账单文件
-- 数据过滤：自动过滤"不计收支"的记录
-- 自定义导出：文件名格式为 `用户名-月份-来源-已分类账单.csv`
+
+- 微信 / 支付宝账单（Excel / CSV），文件名可自动推断来源
+- GUI（默认）与 CLI（`--cli`）双模式
+- 规则库渐进学习：商户+商品组合键、正则规则、模糊匹配
+- GUI 多账单连续处理（主线程调度 tkinter，工作线程分类）
+- 导出至 `已分类/{year}/`，可选同步年度总表 xlsx
+- PyInstaller 打包（`build.spec` → `dist/BillCategorizer/`）
+
+**唯一入口：** `python main.py`（遗留单体 `WeChatBillCategorizer.py` 已移除）
 
 ---
 
-## 2. 系统架构
-
-### 2.1 模块结构
+## 2. 模块结构
 
 ```
 BillCategorizer/
-├── main.py                 # 主程序入口，初始化所有模块
-├── config.py               # 配置管理器
-├── data_loader.py          # 数据加载器（读取Excel/CSV）
-├── learning_engine.py      # 学习引擎（规则库管理）
-├── categorizer.py          # 分类器（主控制器）
-├── user_interface.py       # CLI用户界面
-├── gui_interface.py        # GUI图形界面
-└── data_exporter.py       # 数据导出器
+├── main.py                      # 入口：依赖注入、GUI/CLI 模式、后台线程
+├── config.py                    # ConfigManager：默认配置 + config.json 合并
+├── data_loader.py               # 账单发现、编码检测、格式标准化
+├── learning_engine.py           # 规则库 / 历史 / 建议 / 学习
+├── categorizer.py               # 分类流程编排（BillCategorizer）
+├── user_interface.py            # CLI 交互
+├── gui_interface.py             # GUI 兼容 re-export → gui.interface.GUIInterface
+├── gui/                         # GUI 子模块（Mixin 组合）
+│   ├── interface.py             # GUIInterface 主类
+│   ├── thread_bridge.py         # 主线程调度（task_queue / run_on_main_thread）
+│   ├── dialogs.py               # 来源、文件、人员、分类对话框
+│   ├── transaction_panel.py     # 逐笔交易面板（Label 复用、菜单缓存）
+│   ├── classified_list.py       # 已分类 Treeview 增量更新
+│   └── results_panel.py         # 结果预览、总表同步、继续/退出
+├── data_exporter.py             # 内部 DataFrame → 导出 CSV
+├── master_spreadsheet.py        # 年度总表 xlsx 合并
+├── app_paths.py                 # 开发/打包路径解析
+├── bill_analyzer.py             # 可选：已分类 CSV 年度分析（独立脚本，需 matplotlib）
+├── hooks/pyi_rth_billcategorizer.py  # PyInstaller runtime hook
+├── build.spec                   # PyInstaller 规格（onedir）
+├── scripts/build_exe.ps1        # Windows 打包脚本
+├── config.json                  # 用户配置（可修改）
+├── bill_rules_optimized.json    # 规则库（本地，gitignore）
+└── bill_history.json            # 历史记录（本地，gitignore）
 ```
 
-### 2.2 核心模块说明
+### 2.1 组件职责
 
-#### 2.2.1 main.py - 主程序入口
-- **职责**：程序启动、模块初始化、模式选择
-- **功能**：
-  - UTF-8编码修复（兼容PyInstaller打包）
-  - 检测GUI可用性，自动选择界面模式
-  - 初始化所有核心模块
-  - 支持 `--cli` 参数强制使用命令行模式
-
-#### 2.2.2 config.py - 配置管理器
-- **职责**：统一管理所有配置
-- **功能**：
-  - 加载默认配置和自定义配置（config.json）
-  - 配置合并（支持部分覆盖）
-  - 提供配置访问接口（`get()`, `set()`）
-  - 管理文件路径配置
-
-#### 2.2.3 data_loader.py - 数据加载器
-- **职责**：读取和处理账单文件
-- **功能**：
-  - 支持微信、支付宝账单（Excel/CSV）
-  - 自动检测文件编码（UTF-8, GBK, GB2312等）
-  - 格式转换：将不同来源的账单统一为标准格式
-  - 数据过滤：在读取时过滤"不计收支"的记录
-  - 递归搜索：支持子目录中的账单文件
-
-#### 2.2.4 learning_engine.py - 学习引擎
-- **职责**：管理分类规则库，提供智能建议
-- **功能**：
-  - 规则库管理：{商户: [分类, 使用次数]}
-  - 历史记录管理
-  - 智能建议：精确匹配、模糊匹配
-  - 规则学习：从用户决策中学习
-  - 性能优化：索引加速、数量限制
-
-#### 2.2.5 categorizer.py - 分类器（主控制器）
-- **职责**：协调各个模块完成分类任务
-- **功能**：
-  - 流程控制：选择来源 → 选择文件 → 选择人员模式 → 处理交易 → 导出结果
-  - 交易处理：逐条显示交易，获取用户分类选择
-  - 统计信息：自动分类数、手动分类数、跳过数
-  - 结果展示
-
-#### 2.2.6 user_interface.py - CLI界面
-- **职责**：命令行交互
-- **功能**：
-  - 显示欢迎信息
-  - 文件列表选择
-  - 人员模式选择
-  - 分类菜单显示
-  - 用户输入验证
-
-#### 2.2.7 gui_interface.py - GUI界面
-- **职责**：图形界面交互
-- **功能**：
-  - Tkinter窗口管理
-  - 模态对话框（文件选择、人员选择、分类选择）
-  - 交易处理窗口（进度条、分类选择、已分类列表）
-  - 结果显示窗口（数据预览、统计信息）
-
-#### 2.2.8 data_exporter.py - 数据导出器
-- **职责**：数据格式转换和导出
-- **功能**：
-  - 数据标准化：转换为统一输出格式
-  - 日期格式化：YYYY-MM-DD格式
-  - 金额处理：支出为负，收入为正
-  - 文件名生成：`用户名-月份-来源-已分类账单.csv`
+| 组件 | 职责 | 文件 |
+|------|------|------|
+| 入口 / 引导 | UTF-8 修复、依赖检查、模块装配、GUI 线程 | `main.py` |
+| 配置 | 点路径 `get()` / `set()`、文件路径 | `config.py` |
+| 数据加载 | 解析微信/支付宝、标准化列、过滤无效行 | `data_loader.py` |
+| 学习引擎 | 规则/历史持久化、建议、学习 | `learning_engine.py` |
+| 分类编排 | 主循环、逐笔分类、统计、总表合并 | `categorizer.py` |
+| CLI UI | 命令行提示与校验 | `user_interface.py` |
+| GUI UI | Tkinter 对话框与面板，duck-type CLI 接口 | `gui/` + `gui_interface.py` |
+| 导出 | 导出 schema、CSV 命名与目录 | `data_exporter.py` |
+| 总表合并 | 按月份 sheet 追加、去重 | `master_spreadsheet.py` |
+| 路径 | exe 目录 vs 捆绑资源 | `app_paths.py` |
 
 ---
 
-## 3. 数据流程
+## 3. 架构模式
 
-### 3.1 完整处理流程
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     程序启动 (main.py)                       │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   初始化模块                  │
-        │  - ConfigManager              │
-        │  - DataLoader                 │
-        │  - LearningEngine             │
-        │  - UserInterface/GUIInterface │
-        │  - DataExporter               │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   用户选择账单来源            │
-        │   (微信/支付宝/银行/现金/其他)│
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   搜索并选择账单文件          │
-        │   (支持子目录递归搜索)        │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   DataLoader 读取文件          │
-        │   - 检测编码                  │
-        │   - 格式转换（统一为标准格式） │
-        │   - 过滤"不计收支"记录        │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   用户选择人员模式            │
-        │   - 统一人员 / 每条单独选择    │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   逐条处理交易                │
-        │   ┌─────────────────────────┐ │
-        │   │ 1. 显示交易信息         │ │
-        │   │ 2. 选择人员（如需要）   │ │
-        │   │ 3. LearningEngine获取  │ │
-        │   │    分类建议             │ │
-        │   │ 4. 显示分类菜单         │ │
-        │   │ 5. 用户选择分类         │ │
-        │   │ 6. 记录学习（更新规则库）│ │
-        │   └─────────────────────────┘ │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   LearningEngine 保存数据     │
-        │   - 保存规则库                 │
-        │   - 保存历史记录               │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   DataExporter 导出结果       │
-        │   - 数据标准化                │
-        │   - 日期格式化                │
-        │   - 生成CSV文件               │
-        └───────────────┬───────────────┘
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │   显示处理结果                 │
-        │   - 统计信息                  │
-        │   - 文件路径                  │
-        └───────────────────────────────┘
-```
-
-### 3.2 数据格式转换流程
-
-#### 输入格式（微信）
-```
-交易时间 | 交易类型 | 交易对方 | 商品 | 收/支 | 金额(元) | ...
-```
-
-#### 输入格式（支付宝）
-```
-交易时间 | 交易分类 | 交易对方 | 商品说明 | 收/支 | 金额 | ...
-```
-
-#### 统一标准格式（内部处理）
-```
-交易时间 | 交易类型 | 交易对方 | 商品 | 收/支 | 金额(元) | 处理后的金额
-```
-
-#### 输出格式（CSV）
-```
-Name | Category | Amount | Date | Person | Source
-```
+- **扁平模块布局**：根目录 `.py` 文件，无 Python 包命名空间（`gui/` 为唯一子包）
+- **依赖注入**：`BillCategorizer` 通过构造函数接收全部协作对象，不在内部实例化 loader/UI
+- **UI 可替换**：`UserInterface` 与 `GUIInterface` 暴露相同方法面；编排器用 `hasattr(self.ui, 'show_results')` 识别 GUI
+- **有状态持久化**：规则/历史为 JSON；会话内分类结果在 pandas DataFrame 列（`分类`、`人员`、`是否自动分类`）
+- **GUI 线程模型**：Tkinter 主循环在主线程；`BillCategorizer.run()` 在 daemon 后台线程；跨线程 UI 经 `run_on_main_thread` + `task_queue`
 
 ---
 
-## 4. 配置文件说明
+## 4. 数据流程
 
-### 4.1 config.json
+### 4.1 主流程
 
-```json
-{
-  "files": {
-    "rules_file": "bill_rules_optimized.json",      // 规则库文件
-    "history_file": "bill_history.json",            // 历史记录文件
-    "notion_config_file": "notion_config.json"      // Notion配置（可选）
-  },
-  "limits": {
-    "max_rules": 50000,                              // 最大规则数
-    "max_history": 5000                              // 最大历史记录数
-  },
-  "categories": {
-    "bill_sources": ["微信", "支付宝", "银行", "现金", "其他"],
-    "people_options": ["男主人", "女主人", "家庭公用", "文波", "杜前"],
-    "base_categories": ["餐饮", "出行", "住房贷款", ...],
-    "special_types": {}                              // 特殊类型（已移除自动分类）
-  },
-  "display": {
-    "preview_count": 5,                              // 预览数量
-    "progress_interval": 10                         // 进度显示间隔
-  }
-}
+```text
+main.py 启动
+  → ConfigManager / DataLoader / LearningEngine / UI / DataExporter
+  → BillCategorizer.run()  [GUI: 后台线程]
+       → 选择来源 → 选择文件 → resolve_bill_source（文件名可覆盖来源）
+       → DataLoader 读取并标准化
+       → 选择人员模式
+       → 逐笔 _process_single_transaction
+            → LearningEngine.get_suggestions
+            → UI 获取分类（GUI: 主线程对话框）
+            → LearningEngine.learn_from_decision
+       → DataExporter 导出 CSV → 已分类/{year}/
+       → 可选 _maybe_merge_to_master → master_spreadsheet
+       → 显示结果；GUI 询问继续/退出
+  → LearningEngine.save_data()
 ```
 
-### 4.2 bill_rules_optimized.json
+### 4.2 GUI 多账单循环
 
-规则库文件，存储学习到的分类规则：
-```json
-{
-  "version": "2.0",
-  "total_rules": 113,
-  "rules": {
-    "商户名": ["分类", 使用次数],
-    "美团": ["交通出行", 36],
-    "杜文": ["人情往来", 2]
-  }
-}
-```
+结果页「是，继续」→ `categorizer` 重置 GUI 状态 → 重新选择来源/文件，不重启进程。  
+「否，退出」→ 设置 `should_stop`，结束外层 `while True`。
 
-### 4.3 bill_history.json
+### 4.3 内部列名与导出列
 
-历史记录文件，存储所有分类决策：
-```json
-[
-  {
-    "merchant": "商户名",
-    "category": "分类",
-    "person": "人员",
-    "bill_source": "来源",
-    "amount": 金额,
-    "timestamp": "时间戳"
-  }
-]
-```
+**内部处理（中文列）：** `交易对方`、`商品`、`交易时间`、`金额(元)`、`收/支`、`分类`、`人员`、`是否自动分类`
+
+**导出 CSV（英文列）：** `Name`、`Category`、`Amount`、`Date`、`Person`、`Source`、`是否自动分类`
 
 ---
 
-## 5. 核心功能详解
+## 5. 配置说明
 
-### 5.1 账单读取与转换
+### 5.1 config.json 要点
 
-**支持格式：**
-- 微信：Excel (.xlsx, .xls), CSV
-- 支付宝：Excel (.xlsx, .xls), CSV
+| 键 | 说明 |
+|----|------|
+| `files.rules_file` / `history_file` | 规则库与历史 JSON 路径 |
+| `files.export_dir` | 导出目录模板，默认 `已分类/{year}` |
+| `categories.*` | 来源、人员、基础分类列表 |
+| `display.progress_interval` | CLI 进度间隔；GUI 自动分类批量刷新节流 |
+| `master_spreadsheet.enabled` | 是否默认自动合并（默认 `false`） |
+| `master_spreadsheet.path` | 总表路径，如 `已分类/{year}/{year}总表.xlsx` |
+| `master_spreadsheet.sheet_naming` | Sheet 名模板，如 `{month}` → `4月` |
+| `master_spreadsheet.dedupe_keys` | 去重键，默认 `Date` + `Amount` + `Name` |
 
-**处理流程：**
-1. 检测文件扩展名
-2. 尝试多种编码（UTF-8, GBK, GB2312等）
-3. 查找数据开始行（跳过说明信息）
-4. 读取数据到DataFrame
-5. **过滤"不计收支"记录**（支付宝）
-6. 转换为统一标准格式
+GUI 可在结果页勾选「同步本单到总表」或「后续自动同步」，覆盖单次/会话行为。CLI 可用 `--merge-master`。
 
-### 5.2 智能分类建议
+### 5.2 规则库格式
 
-#### 5.2.1 建议生成逻辑
+规则键支持多种形态：
 
-分类建议通过 `learning_engine.get_suggestions()` 方法生成，采用两级匹配策略：
+- 组合键：`商户|商品` 或 `商户|`（无商品）
+- 正则键：`regex:pattern`
+- 遗留 plain 商户名（无 `|`）
 
-**第一级：精确匹配（优先级最高）**
-```python
-if merchant_str in self.rules:
-    # 如果商户名完全匹配规则库中的某个商户
-    category = self.rules[merchant_str][0]  # 获取分类
-    suggestions[category] = f"精确匹配: {merchant_str}"
-```
-
-**示例：**
-- 规则库中有：`{"美团": ["交通出行", 36]}`
-- 当前交易商户：`"美团"`
-- 结果：建议 `"交通出行"`，理由：`"精确匹配: 美团"`
-
-**第二级：模糊匹配（使用索引加速）**
-```python
-# 1. 提取商户名前3个字符作为索引键
-index_key = merchant_str[:3].lower()  # 例如："美团" -> "美团"
-
-# 2. 从索引中查找相似商户
-similar_merchants = self.merchant_index.get(index_key, [])
-
-# 3. 检查是否包含关系（双向）
-for similar_merchant in similar_merchants:
-    if similar_merchant in merchant_str or merchant_str in similar_merchant:
-        category = self.rules[similar_merchant][0]
-        suggestions[category] = f"类似商户: {similar_merchant}"
-        break  # 只返回第一个匹配的
-```
-
-**示例：**
-- 规则库中有：`{"美团平台商户": ["生活缴费", 15]}`
-- 当前交易商户：`"美团外卖"`
-- 索引键：`"美团"`（前3个字符）
-- 匹配：`"美团平台商户"` 包含 `"美团"`，且 `"美团"` 在 `"美团外卖"` 中
-- 结果：建议 `"生活缴费"`，理由：`"类似商户: 美团平台商户"`
-
-#### 5.2.2 索引机制
-
-**索引构建：**
-```python
-# 在加载规则库时构建索引
-for merchant in self.rules.keys():
-    if len(merchant) >= 3:
-        index_key = merchant[:3].lower()  # 前3个字符转小写
-        self.merchant_index[index_key].append(merchant)
-```
-
-**索引结构：**
-```
-merchant_index = {
-    "美团": ["美团", "美团平台商户", "美团外卖"],
-    "滴滴": ["滴滴出行", "滴滴打车"],
-    "京东": ["京东", "京东商城平台商户"]
-}
-```
-
-**优势：**
-- 快速查找：O(1) 时间复杂度获取候选商户列表
-- 减少遍历：只需检查索引键相同的商户，而不是全部规则库
-
-#### 5.2.3 建议显示格式
-
-**GUI模式：**
-```
-系统建议:
-  [1] 交通出行 ← 精确匹配: 美团
-  [2] 生活缴费 ← 类似商户: 美团平台商户
-
-基础分类:
-  [3] 餐饮
-  [4] 出行
-  [5] 住房贷款
-  ...
-  [n] 输入新分类
-  [s] 跳过
-  [q] 退出
-```
-
-**CLI模式：**
-```
-🤖 系统建议:
-  [1] 交通出行 ← 精确匹配: 美团
-  [2] 生活缴费 ← 类似商户: 美团平台商户
-
-🎯 基础分类:
-  [3] 餐饮
-  [4] 出行
-  ...
-  [n] 输入新分类
-  [s] 跳过（标记为待确认）
-  [q] 退出程序
-```
-
-#### 5.2.4 建议数量说明
-
-**为什么可能只有一个建议？**
-
-`suggestions` 是一个字典 `{分类名: 理由}`，因此：
-
-**情况1：只匹配到一级**
-- 只有精确匹配，没有模糊匹配 → 1个建议
-- 只有模糊匹配，没有精确匹配 → 1个建议
-
-**情况2：两级都匹配，但分类相同（字典覆盖）**
-```python
-# 规则库：
-#   {"美团": ["交通出行", 36]}
-#   {"美团外卖": ["交通出行", 5]}
-# 当前商户："美团"
-# 结果：只有1个建议 "交通出行"
-# 原因：精确匹配和模糊匹配返回相同分类，字典覆盖
-```
-
-**情况3：两级都匹配，分类不同（会有2个建议）**
-```python
-# 规则库：
-#   {"美团": ["交通出行", 36]}
-#   {"美团平台商户": ["生活缴费", 15]}
-# 当前商户："美团平台商户"
-# 结果：2个建议
-#   - "生活缴费" ← 精确匹配: 美团平台商户
-#   - "交通出行" ← 类似商户: 美团
-```
-
-**情况4：模糊匹配的限制**
-- 模糊匹配使用 `break`，只返回第一个匹配的商户
-- 即使索引中有多个相似商户，也只添加第一个匹配的分类
-
-#### 5.2.5 建议优先级
-
-1. **精确匹配**：商户名完全相同 → 显示在建议列表最前面
-2. **模糊匹配**：商户名部分匹配 → 显示在精确匹配之后
-3. **基础分类**：所有基础分类 → 显示在建议之后
-
-**注意：**
-- 如果同时有精确匹配和模糊匹配，都会显示（如果分类不同）
-- 如果分类相同，字典会覆盖，最终只显示一个（理由可能是模糊匹配的）
-- 模糊匹配只返回第一个匹配的商户
-- 建议按匹配顺序显示，精确匹配优先
-
-#### 5.2.5 学习与更新
-
-**学习触发：**
-- 用户选择分类后，调用 `learn_from_decision()` 更新规则库
-
-**规则更新逻辑：**
-```python
-if merchant not in self.rules:
-    # 新商户：添加新规则，使用次数=1
-    self.rules[merchant] = [category, 1]
-    # 更新索引
-    if len(merchant) >= 3:
-        index_key = merchant[:3].lower()
-        self.merchant_index[index_key].append(merchant)
-else:
-    # 已有商户：使用次数+1
-    self.rules[merchant][1] += 1
-```
-
-**效果：**
-- 首次遇到商户：需要手动分类，系统记录
-- 再次遇到相同商户：自动建议之前选择的分类
-- 使用次数越多，规则越稳定
-
-### 5.3 学习机制
-
-**学习触发：**
-- 用户每次选择分类后，自动记录到规则库
-
-**规则更新：**
-- 新商户：添加新规则，使用次数=1
-- 已有商户：使用次数+1
-
-**性能优化：**
-- 索引加速：商户名前3个字符作为索引
-- 数量限制：最多保留50000条规则，按使用次数排序
-
-### 5.4 数据导出
-
-**输出格式：**
-- 文件名：`用户名-月份-来源-已分类账单.csv`
-- 列：Name, Category, Amount, Date, Person, Source
-- 日期格式：YYYY-MM-DD（如：2025-10-31）
-- 金额：支出为负数，收入为正数
-
-**数据来源：**
-- Name：交易对方 + 商品
-- Category：用户选择的分类
-- Amount：处理后的金额（带正负号）
-- Date：交易时间（仅日期部分）
-- Person：用户选择的人员
-- Source：账单来源
+值可为 `[分类, 次数]`、单值，或 `{分类: 次数}` 多分类字典。
 
 ---
 
-## 6. GUI vs CLI 模式
+## 6. 学习引擎（learning_engine.py）
 
-### 6.1 GUI模式（默认）
-- 使用 `gui_interface.py`
-- Tkinter图形界面
-- 模态对话框交互
-- 实时进度显示
-- 已分类列表展示
+### 6.1 建议优先级（get_suggestions）
 
-### 6.2 CLI模式
-- 使用 `user_interface.py`
-- 命令行交互
-- 支持 `--cli` 参数强制使用
-- GUI初始化失败时自动回退
+1. **组合键精确/推荐匹配**：`商户|商品` 或 `商户|`
+2. **正则匹配**：键以 `regex:` 开头
+3. **模糊匹配**：商户名前 3 字符索引，仅针对无 `|` 的旧格式键
 
----
+有商品名时组合键匹配标记为「精准匹配」；仅商户时标记为「推荐匹配」。
 
-## 7. 关键技术点
+### 6.2 学习（learn_from_decision）
 
-### 7.1 编码处理
-- 自动检测文件编码
-- UTF-8编码修复（兼容PyInstaller）
-- 支持中文路径和文件名
+用户确认分类后更新规则计数并追加历史；GUI 编辑已分类记录时可 `update_existing=True` 修正规则。
 
-### 7.2 数据过滤
-- 支付宝账单：读取时过滤"不计收支"记录
-- 减少不必要的数据处理
+### 6.3 持久化
 
-### 7.3 文件搜索
-- 递归搜索子目录
-- 支持Excel和CSV文件
-- 文件名关键词匹配
-
-### 7.4 性能优化
-- 规则库索引加速
-- 数量限制防止内存溢出
-- 延迟加载GUI组件
+启动时 `_load_data()`；每单处理结束 `save_data()`。规则超限时按使用次数裁剪。
 
 ---
 
-## 8. 依赖说明
+## 7. 数据加载（data_loader.py）
 
-### 8.1 核心依赖
-- `pandas`：数据处理
-- `openpyxl`：Excel文件读取
-
-### 8.2 GUI依赖
-- `tkinter`：Python标准库，GUI界面
-
-### 8.3 打包依赖
-- `PyInstaller`：打包为exe文件
+- 递归搜索 `.xlsx` / `.xls` / `.csv`（含子目录）
+- 多编码尝试（UTF-8、GBK 等）
+- 支付宝 CSV 跳过说明行；过滤「不计收支」
+- `_standardize_to_wechat_format()` 统一内部 schema
+- `detect_bill_source_from_path()` / `resolve_bill_source()`：从文件名识别微信/支付宝，避免连续处理时来源错用
 
 ---
 
-## 9. 打包说明
+## 8. 导出与总表
 
-### 9.1 打包配置
-- `build.spec`：PyInstaller打包配置
-- `console=False`：无控制台窗口（GUI模式）
-- 包含数据文件：config.json, bill_rules_optimized.json, bill_history.json
+### 8.1 data_exporter.py
 
-### 9.2 打包命令
+- 文件名：`{用户名}-{月}月-{来源}-已分类账单.csv`
+- 目录：`files.export_dir`（按账单 Date 众数解析 `{year}`）
+- 金额：支出为负，收入为正；Date 为 `YYYY-MM-DD`
+
+### 8.2 master_spreadsheet.py
+
+- `MasterSpreadsheetMerger.merge_dataframe()`：打开/创建 xlsx，按月份 sheet 追加
+- 去重：`Date` + `Amount` + `Name` 组合键
+- 合并前可选备份；Excel 占用时返回友好错误（需关闭文件）
+
+---
+
+## 9. GUI 与 CLI
+
+| 模式 | 界面模块 | 启动方式 |
+|------|----------|----------|
+| GUI | `gui_interface.GUIInterface` | `python main.py` |
+| CLI | `user_interface.UserInterface` | `python main.py --cli` |
+
+GUI 特性：
+
+- 主窗口 `withdraw()`，无独立欢迎窗；对话框按需弹出
+- 工作线程禁止直接操作 widget；经 `ThreadBridgeMixin`
+- 结果页内「继续 / 退出」，避免阻塞式 `messagebox` 卡死
+
+CLI 在 GUI 初始化失败时自动回退。
+
+---
+
+## 10. 打包与路径
+
+### 10.1 app_paths.py
+
+- `get_app_dir()`：可写目录（打包后为 exe 同目录）
+- `get_bundle_dir()`：只读捆绑资源（`_MEIPASS`）
+- `ensure_runtime_files()`：首次运行复制 JSON 模板到 exe 目录
+
+### 10.2 build.spec
+
+- 入口 `main.py`，`console=False`（窗口模式）
+- `datas`：存在则捆绑 `config.json`、`bill_rules_optimized.json`、`bill_history.json`
+- `hiddenimports`：含 `gui.*` 子模块
+- Runtime hook：`hooks/pyi_rth_billcategorizer.py`
+
 ```bash
-pyinstaller build.spec
+pyinstaller build.spec --clean --noconfirm
+# 或 scripts/build_exe.ps1
 ```
 
 ---
 
-## 10. 扩展点
+## 11. 测试
 
-### 10.1 添加新的账单来源
-修改 `data_loader.py`：
-- 添加 `_load_xxx_excel()` 方法
-- 添加 `_load_xxx_csv()` 方法
-- 在 `load_excel_file()` 中添加分支
+| 文件 | 覆盖 |
+|------|------|
+| `test_learning_engine.py` | 建议、学习、正则规则 |
+| `test_categorizer_core.py` | 总表开关、来源推断 |
+| `test_master_spreadsheet.py` | 合并、去重、月份 |
+| `test_gui.py` / `test_phase1_integration.py` | GUI 线程与多账单（CI 下 skip） |
+| `test_app_paths.py` | 打包路径 |
 
-### 10.2 修改分类逻辑
-修改 `learning_engine.py`：
-- `get_suggestions()`：修改建议算法
-- `learn_from_decision()`：修改学习逻辑
+```bash
+pytest -v
+```
 
-### 10.3 修改导出格式
-修改 `data_exporter.py`：
-- `prepare_final_dataframe()`：修改数据格式
-- `export_to_csv()`：修改文件名或格式
+CI（`.github/workflows/python-package-conda.yml`）：flake8 + pytest + PyInstaller（Linux / Windows）。
 
 ---
 
-## 11. 注意事项
+## 12. 扩展点
 
-1. **编码问题**：确保文件使用UTF-8编码保存
-2. **路径问题**：支持中文路径，但建议使用英文路径
-3. **数据备份**：规则库和历史记录会自动保存，建议定期备份
-4. **Excel打开CSV**：日期可能显示为系统默认格式，这是Excel的自动识别行为
-5. **GUI线程**：tkinter必须在主线程运行，分类处理在后台线程
+| 目标 | 修改位置 |
+|------|----------|
+| 新账单来源 | `data_loader.py`：加载器 + `_standardize_to_wechat_format` |
+| 分类逻辑 | `learning_engine.py`：`get_suggestions` / `learn_from_decision` |
+| GUI 交互 | `gui/` 对应 Mixin |
+| 导出格式 | `data_exporter.py` |
+| 总表策略 | `master_spreadsheet.py` + `config.json` |
+| 年度分析 | `bill_analyzer.py`（独立运行，非主流程） |
 
 ---
 
-## 12. 版本历史
+## 13. 注意事项
 
-### 最新版本特性
-- ✅ 修复GUI显示问题（递归调用错误）
-- ✅ 支付宝账单过滤"不计收支"记录
-- ✅ 支持子目录文件搜索
-- ✅ 优化导出文件名格式
-- ✅ 移除special_types自动分类逻辑
-- ✅ JSON文件格式化输出
+1. **线程**：tkinter 必须在主线程；分类在 daemon 线程
+2. **路径**：配置与 JSON 相对 `ConfigManager.config_dir`（默认项目根或 exe 目录）
+3. **隐私**：账单 CSV、规则库、历史勿提交 git（见 `.gitignore`）
+4. **总表**：合并前关闭 Excel，否则 Permission denied
+5. **special_types**：模块化路径未恢复转账/红包自动分类（见 v2 需求 CLAS-01）
 
+---
+
+## 14. 相关文档
+
+- 使用说明：`README.md`
+- 重构规划：`.planning/ROADMAP.md`
+- 代码库分析：`.planning/codebase/`
+
+*文档对齐代码版本：v1.0 重构完成（2026-06）*

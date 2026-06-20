@@ -40,6 +40,7 @@ Plans:
 **Mode:** mvp
 **Depends on:** Phase 1
 **Requirements:** ARCH-01, ARCH-02, ARCH-03
+**Status:** Complete (2026-06-20)
 **Success Criteria:**
 1. `WeChatBillCategorizer.py` 已删除或标记弃用且逻辑已迁移验证
 2. 嵌套 `BillCategorizer/` 目录已移除，仓库无重复源码
@@ -66,6 +67,7 @@ Plans:
 **Mode:** mvp
 **Depends on:** Phase 1, Phase 2
 **Requirements:** TEST-01, TEST-02, TEST-03, TEST-04
+**Status:** Complete (2026-06-20, pending CI green)
 **Success Criteria:**
 1. `learning_engine.py` 和 `categorizer.py` 有单元测试且本地通过
 2. GUI 多账单流程有冒烟测试（可 mock tkinter）
@@ -77,6 +79,7 @@ Plans:
 **Mode:** mvp
 **Depends on:** Phase 2, Phase 4
 **Requirements:** DOC-01, DOC-02, DOC-03, DOC-04
+**Status:** Complete (2026-06-20)
 **Success Criteria:**
 1. `README.md` 描述的结构、命令、依赖与代码一致
 2. 不存在的模块引用（Notion 等）已从文档移除
@@ -90,10 +93,10 @@ Plans:
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
 | 1 - Fix GUI Thread Safety | **Complete** | 2/2 | 100% |
-| 2 - Legacy Cleanup | Pending | 0/TBD | 0% |
+| 2 - Legacy Cleanup | **Complete** | — | 100% |
 | 3 - GUI Module Refactor | **Complete** | 2/2 | 100% |
-| 4 - Testing & CI | Pending | 0/TBD | 0% |
-| 5 - Docs & Packaging | Pending | 0/TBD | 0% |
+| 4 - Testing & CI | **Complete** | — | 100% |
+| 5 - Docs & Packaging | **Complete** | — | 100% |
 
 ---
 *Roadmap created: 2026-06-08*

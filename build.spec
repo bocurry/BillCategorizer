@@ -6,11 +6,12 @@ from pathlib import Path
 block_cipher = None
 project_dir = Path(SPECPATH)
 
-datas = [
-    (str(project_dir / 'config.json'), '.'),
-    (str(project_dir / 'bill_rules_optimized.json'), '.'),
-    (str(project_dir / 'bill_history.json'), '.'),
-]
+# 规则/历史文件可能不存在（gitignore）；首次运行时会自动创建
+datas = []
+for _name in ('config.json', 'bill_rules_optimized.json', 'bill_history.json'):
+    _path = project_dir / _name
+    if _path.exists():
+        datas.append((str(_path), '.'))
 
 hiddenimports = [
     'pandas',

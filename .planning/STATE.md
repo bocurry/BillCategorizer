@@ -2,74 +2,54 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: Phase 3 — GUI Module Refactor
+current_phase: Phase 5 — Docs & Packaging
 status: complete
-last_updated: "2026-06-08"
+last_updated: "2026-06-20"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 5
   total_plans: 4
   completed_plans: 4
-  percent: 50
+  percent: 100
 ---
 
 # State: BillCategorizer
 
-**Last Updated:** 2026-06-08
-**Current Phase:** Phase 3 — GUI Module Refactor（**Complete**）
-**Project Status:** Phase 3 用户 approved（Task 3 人工回归通过）
+**Last Updated:** 2026-06-20
+**Current Phase:** Phase 5 — Docs & Packaging（**Complete**）
+**Project Status:** v1.0 重构里程碑完成；CI 修复已 push，待 Actions 绿灯确认
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** 用户能够稳定、流畅地完成账单导入→分类→导出流程
-**Current focus:** Phase 4 总表合并已实现（待人工验证）；可选 Phase 2 遗留清理 / Phase 5 测试 CI
+**Current focus:** 里程碑收尾；可选 v2（DATA-01 bill_analyzer 整理、CLAS-01 special_types）
 
-## Phase 3 Progress
+## Phase 5 交付（2026-06-20）
 
-| Item | Status |
-|------|--------|
-| Research | **Done** — RESEARCH.md (2026-06-15) |
-| Plan | **Planned** — 2 plans, 2 waves |
-| Execute Wave 1 | **Done** — 03-01-SUMMARY.md (2026-06-19) |
-| Execute Wave 2 | **Done** — 03-02-SUMMARY.md (2026-06-08) |
-| Task 3 人工回归 | **Done** — user approved 2026-06-08 |
+- README 重写：真实目录、GUI/CLI、总表、打包说明；移除 notion 引用
+- build.spec 可选 datas；CI 构建前创建空规则 JSON
+- main.py flake8 F821 修复
 
-**Plans:**
+## Phase 4 交付（2026-06-20）
 
-- [x] `03-01-PLAN.md` — UI 性能优化（Wave 1, autonomous）— **Complete**
-- [x] `03-02-PLAN.md` — gui/ 包拆分（Wave 2）— **Complete**（user approved）
+- test_learning_engine.py、test_categorizer_core.py
+- .flake8 排除 bill/、BillCategorizer/、build/、dist/
+- CI：Linux flake8 + Windows PyInstaller 修复
 
-**Wave 2 交付：**
+## Phase 2 交付（2026-06-20）
 
-- `gui/` 包 6 模块 + `gui_interface.py` re-export（4 行）
-- 分类菜单：建议区增量更新 + 基础分类 Canvas 复用（减少手动分类闪烁）
-- `pytest test_gui.py test_phase1_integration.py` — 16 passed
-- **ARCH-05** 已满足
-- Task 3 回归中修复：`_select_unified_person`、defer 列表展示滞后（显示下一笔前 flush）
+- 删除 WeChatBillCategorizer.py
+- 移除本地嵌套 BillCategorizer/ 副本（.gitignore 已排除）
 
-**Wave 1 交付：**
+## Phase 3（已完成）
 
-- 交易信息面板 Label/Text 复用
-- 分类菜单 signature 缓存
-- Treeview 增量 `tree_item_to_index`
-- `progress_interval` 节流 + 自动分类批量 Treeview 刷新
-- **UI-04** 已满足
+- gui/ 包 6 模块 + 性能优化 — user approved 2026-06-08
 
 ## Phase 1（已完成）
 
-- [x] 01-01、01-02 — 用户 approved 2026-06-15
-
-## Decisions Log
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-06-15 | Phase 3 先性能后拆分 | Wave 1 用户可感知；Wave 2 降低拆分风险 |
-| 2026-06-15 | 用户跳过 Phase 2 直接 plan Phase 3 | 优先解决逐笔卡顿体验 |
-| 2026-06-19 | 自动分类 defer 批量、手动分类即时刷新 | 减少主线程调度同时保持手动交互反馈 |
-| 2026-06-08 | 手动分类菜单闪烁优化延后至 Wave 2 | 手动占比约 10–20%；已在 Wave 2 transaction_panel 增量更新实现 |
-| 2026-06-08 | 进度条在 display_transaction 时始终同步 | interval 节流仅保留给 defer 批量刷新；用户 exe 实测通过 |
+- GUI 线程安全 — user approved 2026-06-15
 
 ## Blockers
 
@@ -77,6 +57,5 @@ See: `.planning/PROJECT.md`
 
 ## Notes
 
-- Phase 3 **Complete**（user approved 2026-06-08）
-- **exe 打包**：`dist\BillCategorizer\BillCategorizer.exe`（`pyinstaller build.spec`）；账单与导出 CSV 放在 exe 同目录
-- Next 可选：Phase 2 遗留清理、Phase 4 测试 CI、总表自动合并
+- 总表合并：master_spreadsheet.py，默认 enabled: false，结果页手动同步
+- exe：`pyinstaller build.spec` → dist/BillCategorizer/

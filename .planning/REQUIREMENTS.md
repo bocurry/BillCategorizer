@@ -13,9 +13,9 @@
 
 ### Architecture
 
-- [ ] **ARCH-01**: 应用仅有唯一正式入口 `main.py`（文档与打包一致）
-- [ ] **ARCH-02**: 遗留单体 `WeChatBillCategorizer.py` 已移除或明确弃用，逻辑无遗漏迁移
-- [ ] **ARCH-03**: 嵌套重复目录 `BillCategorizer/` 已清理，消除双份源码混淆
+- [x] **ARCH-01**: 应用仅有唯一正式入口 `main.py`（文档与打包一致）
+- [x] **ARCH-02**: 遗留单体 `WeChatBillCategorizer.py` 已移除或明确弃用，逻辑无遗漏迁移
+- [x] **ARCH-03**: 嵌套重复目录 `BillCategorizer/` 已清理，消除双份源码混淆
 - [x] **ARCH-04**: 所有 tkinter UI 调用通过主线程调度（`root.after` 或 task_queue），工作线程不直接操作 widget
 - [x] **ARCH-05**: `gui_interface.py` 拆分为职责清晰的子模块（对话框、交易面板、分类列表等）
 
@@ -28,17 +28,17 @@
 
 ### Testing & CI
 
-- [ ] **TEST-01**: 核心分类逻辑（`learning_engine.py`、`categorizer.py`）有单元测试覆盖
-- [ ] **TEST-02**: GUI 多账单流程有自动化冒烟测试（可 mock tkinter）
+- [x] **TEST-01**: 核心分类逻辑（`learning_engine.py`、`categorizer.py`）有单元测试覆盖
+- [x] **TEST-02**: GUI 多账单流程有自动化冒烟测试（可 mock tkinter）
 - [ ] **TEST-03**: GitHub Actions CI 流水线（pytest + flake8 + PyInstaller）稳定通过
-- [ ] **TEST-04**: 添加 `.gitignore`，排除个人账单数据、构建产物、venv
+- [x] **TEST-04**: 添加 `.gitignore`，排除个人账单数据、构建产物、venv
 
 ### Documentation & Packaging
 
-- [ ] **DOC-01**: `README.md` 反映真实目录结构、运行方式（GUI/CLI）、依赖安装步骤
+- [x] **DOC-01**: `README.md` 反映真实目录结构、运行方式（GUI/CLI）、依赖安装步骤
 - [ ] **DOC-02**: `ARCHITECTURE.md` 与代码一致，或合并到 `.planning/codebase/` 引用
 - [x] **DOC-03**: PyInstaller 打包流程文档化，`build.spec` 经验证可产出可执行文件
-- [ ] **DOC-04**: 移除 README 中对不存在模块（如 `notion_integration.py`）的引用
+- [x] **DOC-04**: 移除 README 中对不存在模块（如 `notion_integration.py`）的引用
 
 ## v2 Requirements
 
@@ -72,18 +72,18 @@
 | UI-02 | Phase 1 | Done |
 | UI-03 | Phase 1 | Done |
 | UI-04 | Phase 3 | Done |
-| ARCH-01 | Phase 2 | Pending |
-| ARCH-02 | Phase 2 | Pending |
-| ARCH-03 | Phase 2 | Pending |
+| ARCH-01 | Phase 2 | Done |
+| ARCH-02 | Phase 2 | Done |
+| ARCH-03 | Phase 2 | Done |
 | ARCH-05 | Phase 3 | Done |
-| TEST-01 | Phase 4 | Pending |
-| TEST-02 | Phase 4 | Pending |
-| TEST-03 | Phase 4 | Pending |
-| TEST-04 | Phase 4 | Pending |
-| DOC-01 | Phase 5 | Pending |
+| TEST-01 | Phase 4 | Done |
+| TEST-02 | Phase 4 | Done |
+| TEST-03 | Phase 4 | Pending CI |
+| TEST-04 | Phase 4 | Done |
+| DOC-01 | Phase 5 | Done |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Done |
-| DOC-04 | Phase 5 | Pending |
+| DOC-04 | Phase 5 | Done |
 
 **Coverage:**
 - v1 requirements: 18 total

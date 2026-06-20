@@ -146,8 +146,8 @@ def main(use_gui=True, merge_master=False):
                 except Exception as e:
                     try:
                         user_interface.run_on_main_thread(
-                            lambda: __import__('tkinter.messagebox', fromlist=['showerror']).showerror(
-                                "错误", f"处理过程中出错: {e}"
+                            lambda err=e: __import__('tkinter.messagebox', fromlist=['showerror']).showerror(
+                                "错误", f"处理过程中出错: {err}"
                             ),
                             default_on_stop=None,
                         )

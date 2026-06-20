@@ -45,6 +45,8 @@ jobs:
     - name: Build with PyInstaller (Linux)
       run: |
         pip install pyinstaller
+        test -f bill_rules_optimized.json || echo '{}' > bill_rules_optimized.json
+        test -f bill_history.json || echo '[]' > bill_history.json
         pyinstaller build.spec --clean --noconfirm
         ls -lh dist/
     
@@ -80,6 +82,8 @@ jobs:
         pytest -v
     - name: Build with PyInstaller (Windows)
       run: |
+        if (-not (Test-Path bill_rules_optimized.json)) { '{}' | Out-File -Encoding utf8 bill_rules_optimized.json }
+        if (-not (Test-Path bill_history.json)) { '[]' | Out-File -Encoding utf8 bill_history.json }
         pyinstaller build.spec --clean --noconfirm
         dir dist\BillCategorizer
     - name: Upload Windows build artifacts

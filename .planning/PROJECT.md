@@ -2,93 +2,82 @@
 
 ## What This Is
 
-BillCategorizer 是一个面向个人/家庭使用的智能账单分类桌面工具，支持微信、支付宝账单的导入与交互式分类。通过渐进式学习用户的分类习惯，自动对交易记录进行分类，并导出结构化 CSV。本次工作是对现有棕地代码库的大幅重构，而非从零新建。
+BillCategorizer 是面向个人/家庭的智能账单分类桌面工具，支持微信、支付宝账单导入与交互式分类。通过渐进式学习分类习惯自动分类，导出结构化 CSV，并可选合并到年度 Excel 总表。
 
 ## Core Value
 
-用户能够稳定、流畅地完成「导入账单 → 分类（自动+手动）→ 导出已分类 CSV」的完整流程；GUI 模式下处理多个账单时不卡死、可正常关闭窗口。
+用户能够稳定、流畅地完成「导入账单 → 分类（自动+手动）→ 导出已分类 CSV」；GUI 多账单处理不卡死、可正常关闭。
+
+## Current State (v1.0 — shipped 2026-06-20)
+
+| 项 | 状态 |
+|----|------|
+| 入口 | `python main.py`（GUI）/ `--cli` |
+| GUI | `gui/` 包，主线程桥接，多账单继续/退出 |
+| 测试 | 35 pytest；CI 全绿 |
+| 打包 | `pyinstaller build.spec` → `dist/BillCategorizer/` |
+| 文档 | `README.md`、`ARCHITECTURE.md` 已对齐 |
+| 遗留代码 | `WeChatBillCategorizer.py` 已删除 |
+
+**扩展（v1 会话内交付，非原 ROADMAP）：** `master_spreadsheet.py` 年度总表合并
 
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
-- ✓ 支持微信、支付宝账单（Excel/CSV）读取与格式统一 — existing
-- ✓ 渐进式学习分类规则（`learning_engine.py` + `bill_rules_optimized.json`）— existing
-- ✓ CLI 与 GUI 双模式运行（`main.py --cli` / 默认 GUI）— existing
-- ✓ 导出命名格式 `用户名-月份-来源-已分类账单.csv` — existing
-- ✓ 批处理多个账单文件（循环处理）— Phase 1 修复 GUI 多账单流程
-- ✓ PyInstaller 打包入口为 `main.py` — existing
-- ✓ GUI 多账单连续处理不卡死、可正常关闭窗口 — Phase 1 (2026-06-15)
-- ✓ tkinter 主线程调度（run_on_main_thread / task_queue）— Phase 1 (2026-06-15)
-- ✓ GUI 多账单自动化冒烟测试（test_gui.py + test_phase1_integration.py）— Phase 1
+- ✓ GUI 多账单不卡死、可关闭 — v1.0 Phase 1
+- ✓ tkinter 主线程调度 — v1.0 Phase 1
+- ✓ `gui/` 包拆分 + UI 性能 — v1.0 Phase 3
+- ✓ 遗留清理、唯一入口 — v1.0 Phase 2
+- ✓ 单元测试 + CI 绿灯 — v1.0 Phase 4
+- ✓ README / ARCHITECTURE / 打包 — v1.0 Phase 5
+- ✓ `.gitignore` 保护个人账单 — v1.0 Phase 4
+- ✓ 微信/支付宝、规则学习、CSV 导出 — existing
 
-### Active
+### Active (v2 候选)
 
-- [ ] 清理遗留单体 `WeChatBillCategorizer.py`，统一为模块化架构
-- [ ] 解决嵌套重复目录 `BillCategorizer/` 造成的混淆
-- [ ] 拆分 oversized `gui_interface.py`，改进交互体验（含 UI 流畅性优化）
-- [ ] 补充核心逻辑单元测试与 CI 流水线
-- [ ] 更新 README 与文档，使其与真实目录结构一致
-- [ ] 添加 `.gitignore`，避免个人账单数据入库
-- [ ] 改进 PyInstaller 打包与发布流程
+- [ ] 将 `bill_analyzer.py` 迁入 `scripts/` 并文档化（DATA-01）
+- [ ] 评估恢复 `special_types` 自动分类（CLAS-01）
+- [ ] 刷新 `.planning/codebase/` 或启用 graphify 知识图谱
+- [ ] 导出月份边缘情况（DATA-02）
 
 ### Out of Scope
 
-- Notion 集成 — README 曾提及但模块不存在，本次不实现
-- 新增账单来源（银行 PDF 等）— 聚焦稳定性与架构，非功能扩展
-- Web 版或移动端 — 保持桌面单机应用定位
-- 云同步或多用户 — 个人本地工具，无此需求
+- Notion 集成
+- 新账单来源（银行 PDF 等）
+- Web/移动端、云同步
 
 ## Context
 
-**当前技术栈：** Python 3.9、pandas、openpyxl、tkinter、PyInstaller、pytest、flake8、Conda。
-
-**代码库现状（2026-06-08 映射）：**
-- 活跃入口：`main.py` → 模块化组件（`categorizer.py`、`gui_interface.py` 等）
-- 遗留单体：`WeChatBillCategorizer.py`（~727 行），与模块化实现逻辑已分叉
-- 嵌套重复：`BillCategorizer/` 子目录含过期副本
-- GUI 架构缺陷：`categorizer.run()` 在后台线程执行，但 `gui_interface.py` 直接从工作线程调用 tkinter，导致「继续处理」对话框和窗口关闭偶发死锁
-- 测试薄弱：仅 `test_gui.py` 冒烟测试，无核心逻辑单测
-- 文档漂移：根目录 `README.md` 描述的结构与实际不符；`ARCHITECTURE.md` 较准确
-- 无 `.gitignore`：个人账单 CSV/JSON 可能误入版本库
-
-**用户报告的关键 bug：** GUI 模式处理完第一个账单后，「继续处理」有概率卡住，窗口无法关闭，只能在命令行 Ctrl+C / Ctrl+Z 强制退出。
+**技术栈：** Python 3.9+、pandas、openpyxl、tkinter、PyInstaller、pytest、flake8、Conda
 
 **仓库：** `git@github.com:bocurry/BillCategorizer.git`
 
+**运行产物：** 单账单 CSV → `已分类/{year}/`；可选总表 → `已分类/{year}/{year}总表.xlsx`
+
 ## Constraints
 
-- **Tech stack**: 保持 Python + tkinter + pandas — 用户本地 Conda 环境已配置，避免引入重型新框架
-- **Compatibility**: 现有 `bill_rules_optimized.json` 规则库需向后兼容或提供迁移
-- **Data privacy**: 个人账单数据不得提交到 git
-- **Entry point**: 打包与文档统一指向 `main.py`
+- 保持 Python + tkinter + pandas
+- `bill_rules_optimized.json` 向后兼容
+- 个人账单不得提交 git
+- 打包与文档统一指向 `main.py`
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 先运行 `/gsd-map-codebase` 再初始化项目 | 棕地项目，需基于真实架构做规划 | ✓ 已完成（7 份文档） |
-| 大幅重构（允许重新设计架构） | 用户明确选择 major 深度 | — Pending |
-| 垂直 MVP 切片组织阶段 | 每阶段交付可用的端到端改进 | — Pending |
-| 跳过领域调研 | 用户对项目熟悉，问题明确 | ✓ 已确认 |
-| GUI 线程模型：所有 UI 调度到主线程 | CONCERNS.md 确认根因 | — Pending |
+| GUI 线程：主线程调度 | 工作线程直接 tkinter 导致卡死 | ✓ Phase 1 |
+| 先 Phase 3 后 Phase 2 | 用户优先体验 | ✓ 已执行 |
+| 删除遗留单体 | 双轨代码混淆 | ✓ Phase 2 |
+| 总表默认 enabled: false | 避免误覆盖 Excel | ✓ 用户验证 |
+| 垂直 MVP 阶段 | 每阶段可交付 | ✓ v1.0 完成 |
 
-## Evolution
+## Next Milestone Goals
 
-This document evolves at phase transitions and milestone boundaries.
+运行 `/gsd-new-milestone` 启动 v2.0 规划。建议优先：
 
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
+1. 刷新 planning/codebase 文档或 graphify
+2. v2 功能（bill_analyzer、special_types）
 
 ---
-*Last updated: 2026-06-08 after initialization*
+*Last updated: 2026-06-20 after v1.0 milestone*

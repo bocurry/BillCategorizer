@@ -1,9 +1,8 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-current_phase: Phase 5 — Docs & Packaging
-status: complete
+milestone_name: BillCategorizer Refactor
+status: shipped
 last_updated: "2026-06-20"
 progress:
   total_phases: 5
@@ -15,41 +14,28 @@ progress:
 
 # State: BillCategorizer
 
-**Last Updated:** 2026-06-20
-**Current Phase:** Phase 5 — Docs & Packaging（**Complete**）
-**Project Status:** v1.0 重构里程碑完成；CI 修复已 push，待 Actions 绿灯确认
+**Last Updated:** 2026-06-20  
+**Milestone:** v1.0 — **SHIPPED** (tag `v1.0`)  
+**Project Status:** 重构里程碑完成；规划下一里程碑请运行 `/gsd-new-milestone`
 
 ## Project Reference
 
-See: `.planning/PROJECT.md`
+See: `.planning/PROJECT.md` (updated 2026-06-20)
 
-**Core value:** 用户能够稳定、流畅地完成账单导入→分类→导出流程
-**Current focus:** 里程碑收尾；可选 v2（DATA-01 bill_analyzer 整理、CLAS-01 special_types）
+**Core value:** 稳定流畅完成账单导入→分类→导出  
+**Current focus:** v2 规划（可选）
 
-## Phase 5 交付（2026-06-20）
+## Deferred Items
 
-- README 重写：真实目录、GUI/CLI、总表、打包说明；移除 notion 引用
-- build.spec 可选 datas；CI 构建前创建空规则 JSON
-- main.py flake8 F821 修复
+Items acknowledged at v1.0 milestone close on 2026-06-20:
 
-## Phase 4 交付（2026-06-20）
-
-- test_learning_engine.py、test_categorizer_core.py
-- .flake8 排除 bill/、BillCategorizer/、build/、dist/
-- CI：Linux flake8 + Windows PyInstaller 修复
-
-## Phase 2 交付（2026-06-20）
-
-- 删除 WeChatBillCategorizer.py
-- 移除本地嵌套 BillCategorizer/ 副本（.gitignore 已排除）
-
-## Phase 3（已完成）
-
-- gui/ 包 6 模块 + 性能优化 — user approved 2026-06-08
-
-## Phase 1（已完成）
-
-- GUI 线程安全 — user approved 2026-06-15
+| Category | Item | Status |
+|----------|------|--------|
+| docs | `.planning/codebase/` 仍为 2026-06-08 快照 | deferred → v2 |
+| tooling | GSD graphify 知识图谱未启用 | deferred → v2 |
+| feature | `bill_analyzer.py` 未迁入 scripts/ | deferred → DATA-01 |
+| feature | `special_types` 自动分类未恢复 | deferred → CLAS-01 |
+| audit | 无 v1.0-MILESTONE-AUDIT.md | accepted（18/18 REQ 已勾选，用户已 UAT） |
 
 ## Blockers
 
@@ -57,5 +43,6 @@ See: `.planning/PROJECT.md`
 
 ## Notes
 
-- 总表合并：master_spreadsheet.py，默认 enabled: false，结果页手动同步
-- exe：`pyinstaller build.spec` → dist/BillCategorizer/
+- Archives: `.planning/milestones/v1.0-ROADMAP.md`, `v1.0-REQUIREMENTS.md`
+- Summary: `.planning/MILESTONES.md`
+- CI: GitHub Actions run #19 全绿
